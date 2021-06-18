@@ -53,13 +53,22 @@ def make_choose_eqs_plot(domain, data, compare, compare2, boxplot):
     grouped = list(grouped.values())
 
     for lst in grouped:
+        # print([compare(x) for x in lst])
         res = list(map(lambda x: float(compare(x)), lst))
         mrat_ys.append(sum(res) / len(res))
+        avg = sum(res) / len(res)
+        var = sum((x-avg)**2 for x in res) / len(res)
+        print(var / avg)
+
         mrat_ys_l.append(res)
         res2 = list(map(lambda x: float(compare2(x)), lst))
         mrat_y2s.append(sum(res2) / len(res2))
+        avg2 = sum(res2) / len(res2)
+        var2 = sum((x-avg2)**2 for x in res2) / len(res2)
+        print(var2 / avg2)
 
     print([x[0]["mrat_m"] for x in grouped])
+    # print(mrat_ys_l)
     # print(json.dumps(data, indent=4, sort_keys=True))
 
     y = [orat_y] + mrat_ys + [min_y]
@@ -78,7 +87,7 @@ def make_choose_eqs_plot(domain, data, compare, compare2, boxplot):
     else:
         compare1.bar(x, y, width, color='lightblue')
 
-    compare1.set(xlabel="choose_eqs setting", ylabel="Time (seconds)")
+    compare1.set(xlabel="choose_eqs setting", ylabel="Time (s)")
     compare1.set_title("Time")
 
     compare2.bar(x, y2, width, color='lightsalmon')
@@ -164,7 +173,7 @@ def aggregate_egraphs_list(our_list):
 
     return total
 
-def compare_phase_times(data, dataset_names, legend_outside=False):
+def compare_phase_times(data, dataset_names, legend_outside=False, sigdigs=False):
     # TODO: sort in order of the dataset_names
     names = dataset_names
     phase_times = list(filter(lambda x: x['type'] == 'phase-times', data))
@@ -194,23 +203,40 @@ def compare_phase_times(data, dataset_names, legend_outside=False):
     # first sum all the items in the inner loop
     # then, avg with the outer loop
     agg_phases = []
+    agg_phases_domain = {'run_rewrites': [], 'rule_discovery': [], 'rule_minimization': [], 'rule_validation': []}
+
+    
     reduce_base = {'run_rewrites': 0.0, 'rule_discovery': 0.0, 'rule_minimization': 0.0, 'rule_validation': 0.0}
     for run in phases_by_name:
         runs_avg = reduce_base
+        agg_phases_l = {'run_rewrites': [], 'rule_discovery': [], 'rule_minimization': [], 'rule_validation': []}
         for iter in run:
             iter_info = iter['phases']
             inner_sum = reduce(sum, iter_info, reduce_base)
+            # print(inner_sum)
             runs_avg["run_rewrites"] = inner_sum["run_rewrites"]
             runs_avg["rule_discovery"] = inner_sum["rule_discovery"]
             runs_avg["rule_minimization"] = inner_sum["rule_minimization"]
             runs_avg["rule_validation"] = inner_sum["rule_validation"]
-            print(runs_avg)
+
+            # agg_phases_l["run_rewrites"].append(inner_sum["run_rewrites"])
+            # agg_phases_l["rule_discovery"].append(inner_sum["rule_discovery"])
+            # agg_phases_l["rule_minimization"].append(inner_sum["rule_minimization"])
+            # agg_phases_l["rule_validation"].append(inner_sum["rule_validation"])
+            # print(runs_avg)
         runs_avg = avg(runs_avg, len(run))
-        print(runs_avg)
+        # print(runs_avg)
 
         agg_phases.append(runs_avg)
         
+        # agg_phases_domain["run_rewrites"].append(agg_phases_l["run_rewrites"])
+        # agg_phases_domain["rule_discovery"].append(agg_phases_l["rule_discovery"])
+        # agg_phases_domain["rule_minimization"].append(agg_phases_l["rule_minimization"])
+        # agg_phases_domain["rule_validation"].append(agg_phases_l["rule_validation"])
+        
+        
     print(agg_phases)
+    print(agg_phases_domain)
     
     fig, ax = plt.subplots(1)
     
@@ -219,6 +245,11 @@ def compare_phase_times(data, dataset_names, legend_outside=False):
     rule_minimization = list(map(lambda x: x['rule_minimization'], agg_phases))
     rule_validation = list(map(lambda x: x['rule_validation'], agg_phases))
 
+    # run_rewrites_domain = list(map(lambda x: x['run_rewrites'], agg_phases_domain))
+    # rule_discovery_domain = list(map(lambda x: x['rule_discovery'], agg_phases_domain))
+    # rule_minimization_domain = list(map(lambda x: x['rule_minimization'], agg_phases_domain))
+    # rule_validation_domain = list(map(lambda x: x['rule_validation'], agg_phases_domain))
+
     # cancel out small validation
     rule_validation = [0 if (x < 10e-5) else x for x in rule_validation]
 
@@ -226,13 +257,14 @@ def compare_phase_times(data, dataset_names, legend_outside=False):
 
     width = 0.6
 
-    ax.bar(x, run_rewrites, width/4, label="run_rewrites", color="burlywood")
+    ax.bar(x, run_rewrites, width/4, label="run_rewrites", color="palegoldenrod")
     ax.bar(x + width/4, rule_discovery, width/4, label="rule_discovery", color="skyblue")
-    ax.bar(x + width/2, rule_minimization, width/4, label="rule_minimization", color="firebrick")
-    ax.bar(x + width * 0.75, rule_validation, width/4, label="rule_validation", color="indigo")
+    ax.bar(x + width/2, rule_minimization, width/4, label="rule_minimization", color="peru")
+    ax.bar(x + width * 0.75, rule_validation, width/4, label="rule_validation", color="rebeccapurple")
 
     ax.set_xticks(x + width * 3 / 8)
     ax.set_xticklabels(names)
+    ax.set(ylabel="Time (s)")
 
     # TODO: bools, etc. have a nonzero validation rn because the logging is not 
     # properly done inside new choose_eqs. Need to fix (inside partition)
@@ -243,7 +275,12 @@ def compare_phase_times(data, dataset_names, legend_outside=False):
     labels = [[x["run_rewrites"], x["rule_discovery"], x["rule_minimization"], x["rule_validation"]] for x in agg_phases]
     labels = run_rewrites + rule_discovery + rule_minimization + rule_validation
     # https://stackoverflow.com/questions/3410976/how-to-round-a-number-to-significant-figures-in-python
-    round_to_n = lambda x, n: x if x == 0 else round(x, -int(floor(log10(abs(x)))) + (n - 1))
+    # SIGDIGS
+    if sigdigs:
+        round_to_n = lambda x, n: x if x == 0 else round(x, -int(floor(log10(abs(x)))) + (n - 1))
+    else:
+        # hundredths
+        round_to_n = lambda x, n: round(x,n)
 
     # Flatten
     labels = [round_to_n(item,2) for item in labels]
@@ -253,7 +290,11 @@ def compare_phase_times(data, dataset_names, legend_outside=False):
     for rect, label in zip(rects, labels):
         # rects are probably in order
         height = rect.get_height()
-        ax.text(rect.get_x() + rect.get_width() / 2, height, label, ha='center', va='bottom', size=6)
+        
+        if legend_outside:
+            ax.text(rect.get_x() + rect.get_width() / 2, height, label, ha='center', va='bottom', size=6)
+        else:
+            ax.text(rect.get_x() + rect.get_width() / 2, height, label, ha='center', va='bottom', size=8)
 
     if legend_outside:
         plt.legend(bbox_to_anchor=(1.04,0.5), loc="center left", borderaxespad=0)
@@ -262,6 +303,7 @@ def compare_phase_times(data, dataset_names, legend_outside=False):
         plt.savefig("output/by-domain-phase-times-legend-outside.pdf")
     else:
         plt.legend()
+        fig.set_size_inches(10,5)
         plt.savefig("output/by-domain-phase-times.pdf")
 
     
@@ -324,7 +366,7 @@ def make_phase_time_plot(data):
 
     # sum over all 
 
-def compare_run_rewrites(data):
+def compare_run_rewrites(data, domain):
 
     y1 = lambda x: float(x["learned"]["time"])
     y2 = lambda x: float(x["learned"]["rules"])
@@ -370,7 +412,7 @@ def compare_run_rewrites(data):
     # egraphs.set(xlabel="X", ylabel="Y")
     egraphs.set_title("Num E-classes")
 
-    fig.suptitle("Applying run_rewrites vs not applying run_rewrites")
+    fig.suptitle(domain)
     # minimize.plot()
     # plt.show()
     plt.tight_layout()
@@ -406,17 +448,19 @@ def compare_phase_times_run_rewrites(data, legend_outside=False):
     # first sum all the items in the inner loop
     # then, avg with the outer loop
     agg_phases = []
+
     for run in phases_by_name:
         runs_avg = {'run_rewrites': 0.0, 'rule_discovery': 0.0, 'rule_minimization': 0.0, 'rule_validation': 0.0}
         print(len(run))
         for iter in run:
             iter_info = iter['phases']
             inner_sum = reduce(sum, iter_info, {'run_rewrites': 0.0, 'rule_discovery': 0.0, 'rule_minimization': 0.0, 'rule_validation': 0.0})
+            print(inner_sum)
             runs_avg["run_rewrites"] += inner_sum["run_rewrites"]
             runs_avg["rule_discovery"] += inner_sum["rule_discovery"]
             runs_avg["rule_minimization"] += inner_sum["rule_minimization"]
             runs_avg["rule_validation"] += inner_sum["rule_validation"]
-            print(runs_avg)
+        # TODO: get variance
         runs_avg = avg(runs_avg, len(run))
         print(runs_avg)
 
@@ -496,9 +540,13 @@ def compare_run_rewrites_with_timeout(data, max, set_max=False):
     print(rr_y3)
     rr_y3 = sum(rr_y3) / len(rr_y3)
     
-    no_rr_y1 = 0
-    no_rr_y2 = 0
-    no_rr_y3 = 0
+    # no_rr_y1 = 0
+    # no_rr_y2 = 0
+    # no_rr_y3 = 0
+
+    no_rr_y1 = 60 * 60 * 24
+    no_rr_y2 = 1841
+    no_rr_y3 = 23000
 
     fig, (time, rules, egraphs) = plt.subplots(1,3)
 
@@ -506,19 +554,28 @@ def compare_run_rewrites_with_timeout(data, max, set_max=False):
 
     # average them together
 
+    print(rr_y1)
     # add a minimize bar
-    time.bar(x, [no_rr_y1, rr_y1], width, color='thistle')
+    time.bar(x, [no_rr_y1, rr_y1], width, color=['lightgray', 'thistle'])
     # time.set(xlabel="X", ylabel="Y")
     time.set_title("Time (s)")
-    rules.bar(x, [no_rr_y2, rr_y2], width, color='cadetblue')
+    rules.bar(x, [no_rr_y2, rr_y2], width, color=['lightgray', 'cadetblue'])
     # rules.set(xlabel="X", ylabel="Y")
     rules.set_title("Rules")
-    egraphs.bar(x, [no_rr_y3, rr_y3], width, color='gold')
+    egraphs.bar(x, [no_rr_y3, rr_y3], width, color=['lightgray', 'gold'])
     # egraphs.set(xlabel="X", ylabel="Y")
 
-    time.text(-0.12, 0, "∞", va='bottom', size=20)
-    rules.text(-0.10, 0, "0", va='bottom', size=20)
-    egraphs.text(-0.12, 0, "∞", va='bottom', size=20)
+    # time.text(-0.12, 0, "∞", va='bottom', size=20)
+    # rules.text(-0.10, 0, "0", va='bottom', size=20)
+    # egraphs.text(-0.12, 0, "∞", va='bottom', size=20)
+
+    for plot in [time, rules, egraphs]:
+        labels = ["TIMEOUT", ""]
+        rects = plot.patches
+        for rect, label in zip(rects, labels):
+            # rects are probably in order
+            height = rect.get_height()
+            plot.text(rect.get_x() + rect.get_width() / 2 + 0.03, height/8*5, label, ha='center', va='bottom', size=20, color="red", rotation=90)
 
     print(plt.xticks())
     if set_max:
@@ -528,26 +585,26 @@ def compare_run_rewrites_with_timeout(data, max, set_max=False):
 
     egraphs.set_title("Num E-classes")
 
-    fig.suptitle("Applying run_rewrites vs not applying run_rewrites")
+    fig.suptitle("Rationals")
     # minimize.plot()
     # plt.show()
     plt.tight_layout()
     plt.savefig('output/run-rewrites-timeout.pdf')
 
 # make_choose_eqs_time_rules_plot("bv4", bv4_data, boxplot=False)
-# compare_run_rewrites(bv4_data)
+# compare_run_rewrites(bv4_data, "bv4")
 
 # make_choose_eqs_time_rules_plot("bv32", bv32_data, boxplot=False)
-# compare_run_rewrites(bv32_data)
+# compare_run_rewrites(bv32_data, "bv32")
 
 # make_choose_eqs_time_rules_plot("Rationals", rat_data, boxplot=False)
-# compare_run_rewrites(rat_data)
+# compare_run_rewrites(rat_data, "rational")
 
-# compare_phase_times(data, ["bv4", "bv32", "rational"])
+compare_phase_times(data, ["bv4", "bv32", "rational"])
 # compare_phase_times(data, ["bv4", "bv32", "rational"], legend_outside=True)
 # compare_phase_times(data, ["bool", "bv4ns", "bv8", "bv16", "bv32", "float", "rational"])
 
 # get data... all domains
 # compare_phase_times_run_rewrites(bv4_data, legend_outside=True)
 # compare_phase_times_run_rewrites(bv32_data, legend_outside=True)
-compare_run_rewrites_with_timeout(rat_data, [1000, 150, 10000], set_max=True)
+# compare_run_rewrites_with_timeout(rat_data, [1000, 150, 10000], set_max=False)

@@ -73,8 +73,15 @@ let make_entry = (text) => {
     let phases = Array.from(text.matchAll(phase_time_pattern), item => { return { run_rewrites: item[1], rule_discovery: item[2], rule_minimization: item[3] } });
     let validation = Array.from(text.matchAll(validation_pattern), item => { if (item != undefined) return parseFloat(item[1]); return 0 });
     // Assuming they would be the same length
+
+    // TODO: hacky way of getting around 1-to-1
+    if (validation.length > phases.length) {
+        let rest = validation.slice(phases.length)
+        let rest_validation = rest.reduce((x, acc) => x + acc, 0)
+        validation[phases.length - 1] += rest_validation
+    }
     phases.forEach((d, i) => {
-        v = validation[i] || 0.0;
+        v = validation[i] || 0.0;  // TODO this assumes there is one validation statement emitted per phase, but this may not be true. add together all validation in between phase statements
         d["rule_minimization"] = (parseFloat(d["rule_minimization"]) - v).toString();
         d["rule_validation"] = v.toString();
     })
