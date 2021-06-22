@@ -31,7 +31,7 @@ fi
 
 if [[ "$RUN" == "use-existing" ]] ; then
     echo "Running with existing data."
-    python visualize.py "$MYDIR/submitted-data/compare" "$MYDIR/submitted-data/no-rr"
+    python visualize.py "$MYDIR/submitted-data/compare/" "$MYDIR/submitted-data/no-rr/"
     exit 0
 fi
 
