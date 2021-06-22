@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import json
+import sys
 from functools import reduce
 from itertools import groupby
 from colorsys import hsv_to_rgb
@@ -8,10 +9,6 @@ from random import randint, uniform
 from math import log10, floor
 
 
-data = json.load(open("output/parsed.json"))
-bv4_data = list(filter(lambda x: x['domain'] == "bv4", data))
-bv32_data = list(filter(lambda x: x['domain'] == "bv32", data))
-rat_data = list(filter(lambda x: x['domain'] == "rational", data))
 # print(bool_data)
 def make_choose_eqs_time_rules_plot(domain, data, boxplot=False):
     make_choose_eqs_plot(domain, data, lambda x: x["learned"]["time"], lambda x: x["learned"]["rules"], boxplot)
@@ -97,62 +94,9 @@ def make_choose_eqs_plot(domain, data, compare, compare2, boxplot):
     # minimize.plot()
     fig.suptitle(domain)
     plt.tight_layout();
-    plt.savefig('output/by-config-rules-learned.pdf')
+    plt.savefig('output/' + domain + '-by-config-rules-learned.pdf')
 
     # plt.show()
-
-def make_choose_eqs_line_plot(data):
-    # Collect data
-    orat = list(filter(lambda x: x['type'] == 'orat', data))
-    for item in orat: 
-        item['mrat_m'] = 1
-    
-    mrat = list(filter(lambda x: x['type'] == 'mrat', data))
-    default_conf = list(filter(lambda x: x['type'] == 'default', data))
-
-    
-    # Aggregate all values from the same iteration across runs
-    orat_egraphs = aggregate_egraphs_list(list(map(lambda x: x["egraphs"], orat)))
-    default_conf_egraphs = aggregate_egraphs_list(list(map(lambda x: x["egraphs"], default_conf)))
-    mrat.sort(key=lambda x: x["mrat_m"])
-    mrat_egraphs_by_m = [list(v) for k,v in groupby(mrat, lambda x: x["mrat_m"])]
-    mrat_egraphs_by_m = [dict([('m', lst[0]["mrat_m"]), \
-        ('egraph', aggregate_egraphs_list(list(map(lambda x: x["egraphs"], lst))))]) for lst in mrat_egraphs_by_m]
-    print(mrat_egraphs_by_m)
-
-    # Use number of e-classes
-    selector = lambda x: x['e']
-
-    fig, ax = plt.subplots(1) 
-    plt.scatter(list(range(0, len(orat_egraphs))), [selector(x) for x in orat_egraphs], color="powderblue", label="orat")
-    plt.plot(list(range(0, len(orat_egraphs))), [selector(x) for x in orat_egraphs], color="powderblue")
-    
-    # Generate similar colours for different mrat m
-    h_0 = 0.6 # blue in HSV
-    increment = 0.7 / len(mrat_egraphs_by_m) 
-    print(increment)
-
-    for (i, m) in enumerate(mrat_egraphs_by_m): #range(max([len(x) for x in mrat_egraphs_by_m])):
-        print(m)
-        data = m["egraph"]
-        
-        h = h_0 + 0.07 * i
-        s = 0.2 + increment * i
-        v = 0.3 + increment * i
-        r, g, b = hsv_to_rgb(h, s, v)
-
-        plt.scatter(list(range(0, len(data))), [selector(x) for x in data], color=(r, g, b, 1), label="mrat m=" + m["m"])
-        plt.plot(list(range(0, len(data))), [selector(x) for x in data], color=(r, g, b, 1))
-
-    plt.scatter(list(range(0, len(default_conf_egraphs))), [selector(x) for x in default_conf_egraphs], color="gold", marker="*", s=20, label="default")
-    plt.plot(list(range(0, len(default_conf_egraphs))), [selector(x) for x in default_conf_egraphs], color="gold")
-    
-    # minimize.plot()
-    fig.suptitle("Number of eclasses by iterations")
-    # plt.title("Number of eclasses by iterations")
-    plt.legend()
-    plt.savefig('output/by-config-eclasses-per-iter.pdf')
-    #plt.show()
 
 # Aggregate all values from same iteration across runs
 def aggregate_egraphs_list(our_list):
@@ -314,58 +258,6 @@ def compare_phase_times(data, dataset_names, legend_outside=False, sigdigs=False
 
     # print(runs_avg)
 
-
-def make_phase_time_plot(data):
-    
-    phase_times = list(filter(lambda x: x['type'] == 'phase-times', data))
-    times_only = list(map(lambda x: x['phases'], phase_times))
-    print(times_only)
-
-    # sum time spent in each phase across all iterations
-    # becomes a list of time values, each corresponding to one run
-    agg_times = (list(map(lambda times: \
-        reduce(lambda acc, x: \
-        dict([('run_rewrites', float(x["run_rewrites"]) + acc["run_rewrites"]), \
-        ('rule_discovery', float(x["rule_discovery"]) + acc["rule_discovery"]), \
-        ('rule_minimization', float(x["rule_minimization"]) + acc["rule_minimization"]), \
-        ('rule_validation', float(x["rule_validation"]) + acc["rule_validation"])]), \
-        times, 
-        {'run_rewrites': 0.0, 'rule_discovery': 0.0, 'rule_minimization': 0.0, 'rule_validation': 0.0}),\
-        times_only)))
-
-    run_rewrites = list(map(lambda x: x['run_rewrites'], agg_times))
-    rule_discovery = list(map(lambda x: x['rule_discovery'], agg_times))
-    rule_minimization = list(map(lambda x: x['rule_minimization'], agg_times))
-    rule_validation = list(map(lambda x: x['rule_validation'], agg_times))
-
-    legends = list(map(lambda x: x['run'], phase_times))
-    width = 0.8
-
-    fig, (ax, axg) = plt.subplots(1,2, sharey=True)
-    axg.yaxis.set_tick_params(labelbottom=True)
-
-    ax.bar(legends, run_rewrites, width, label="run_rewrites", color="burlywood")
-    ax.bar(legends, rule_discovery, width, label="rule_discovery", bottom=run_rewrites, color="skyblue")
-    ax.bar(legends, rule_minimization, width, label="rule_minimzation", bottom=[sum(x) for x in zip(run_rewrites, rule_discovery)], color="firebrick")
-    ax.bar(legends, rule_validation, width, label="rule_validation", bottom=[sum(x) for x in zip(run_rewrites, rule_discovery, rule_minimization)], color="indigo")
-
-    # get iter locations
-    x = np.arange(len(run_rewrites))
-
-    axg.bar(x - width/2, run_rewrites, width/4, label="run_rewrites", color="burlywood")
-    axg.bar(x - width / 4, rule_discovery, width/4, label="rule_discovery", color="skyblue")
-    axg.bar(x + width/4, rule_minimization, width/4, label="rule_minimization", color="firebrick")
-    axg.bar(x + width/2, rule_validation, width/4, label="rule_validation", color="indigo")
-
-    # TODO: fix the legend now
-
-    ax.legend()
-    fig.suptitle("Time spent in each phase (by run)")
-    plt.savefig('output/phase-times.pdf')
-    #plt.show()
-
-    # sum over all 
-
 def compare_run_rewrites(data, domain):
 
     y1 = lambda x: float(x["learned"]["time"])
@@ -416,9 +308,9 @@ def compare_run_rewrites(data, domain):
     # minimize.plot()
     # plt.show()
     plt.tight_layout()
-    plt.savefig('output/run-rewrites.pdf')
+    plt.savefig('output/' + domain + '-run-rewrites.pdf')
 
-def compare_phase_times_run_rewrites(data, legend_outside=False):
+def compare_phase_times_run_rewrites(domain, data, legend_outside=False):
     # TODO: sort in order of the dataset_names
     names = ["default", "no-run-rewrites"]
     phase_times = data
@@ -516,12 +408,12 @@ def compare_phase_times_run_rewrites(data, legend_outside=False):
         plt.legend(bbox_to_anchor=(1.04,0.5), loc="center left", borderaxespad=0)
         plt.subplots_adjust(right=0.7)
         fig.set_size_inches(9,5)
-        plt.savefig("output/by-domain-phase-times-legend-outside.pdf")
+        plt.savefig("output/" + domain + "-by-domain-phase-times-legend-outside.pdf")
     else:
         plt.legend()
-        plt.savefig("output/by-domain-phase-times.pdf")
+        plt.savefig("output/" + domain + "-by-domain-phase-times.pdf")
 
-def compare_run_rewrites_with_timeout(data, max, set_max=False):
+def compare_run_rewrites_with_timeout(domain, data, max, set_max=False):
 
     y1 = lambda x: float(x["learned"]["time"])
     y2 = lambda x: float(x["learned"]["rules"])
@@ -565,9 +457,6 @@ def compare_run_rewrites_with_timeout(data, max, set_max=False):
     egraphs.bar(x, [no_rr_y3, rr_y3], width, color=['lightgray', 'gold'])
     # egraphs.set(xlabel="X", ylabel="Y")
 
-    # time.text(-0.12, 0, "∞", va='bottom', size=20)
-    # rules.text(-0.10, 0, "0", va='bottom', size=20)
-    # egraphs.text(-0.12, 0, "∞", va='bottom', size=20)
 
     for plot in [time, rules, egraphs]:
         labels = ["TIMEOUT", ""]
@@ -589,22 +478,38 @@ def compare_run_rewrites_with_timeout(data, max, set_max=False):
     # minimize.plot()
     # plt.show()
     plt.tight_layout()
-    plt.savefig('output/run-rewrites-timeout.pdf')
+    plt.savefig('output/rr-' + domain + '-timeout.pdf')
 
-# make_choose_eqs_time_rules_plot("bv4", bv4_data, boxplot=False)
-# compare_run_rewrites(bv4_data, "bv4")
+def main():
+    if len(sys.argv) < 2:
+        path = "submitted-data/compare/parsed.json"
+        path_rr = "submitted-data/no-rr/parsed.json"
+    else:
+        path = sys.argv[1] + "parsed.json"
+        path_rr = sys.argv[2] + "parsed.json"
+        
+    data = json.load(open(path))
+    data_rr = json.load(open(path_rr))
+    filter_data = lambda name: list(filter(lambda x: x['domain'] == "bv4", data))
+    filter_data_rr = lambda name: list(filter(lambda x: x['domain'] == "bv4", data_rr))
 
-# make_choose_eqs_time_rules_plot("bv32", bv32_data, boxplot=False)
-# compare_run_rewrites(bv32_data, "bv32")
+    make_choose_eqs_time_rules_plot("bv4", filter_data("bv4"), boxplot=False)
+    # compare_run_rewrites(filter_data("bv4"), "bv4")
 
-# make_choose_eqs_time_rules_plot("Rationals", rat_data, boxplot=False)
-# compare_run_rewrites(rat_data, "rational")
+    make_choose_eqs_time_rules_plot("bv32", filter_data("bv32"), boxplot=False)
+    # compare_run_rewrites(filter_data("bv32"), "bv32")
 
-compare_phase_times(data, ["bv4", "bv32", "rational"])
-# compare_phase_times(data, ["bv4", "bv32", "rational"], legend_outside=True)
-# compare_phase_times(data, ["bool", "bv4ns", "bv8", "bv16", "bv32", "float", "rational"])
+    make_choose_eqs_time_rules_plot("rational", filter_data("rational"), boxplot=False)
+    # compare_run_rewrites(filter_data("rational"), "rational")
 
-# get data... all domains
-# compare_phase_times_run_rewrites(bv4_data, legend_outside=True)
-# compare_phase_times_run_rewrites(bv32_data, legend_outside=True)
-# compare_run_rewrites_with_timeout(rat_data, [1000, 150, 10000], set_max=False)
+    compare_phase_times(data, ["bv4", "bv32", "rational"])
+
+    # get data... all domains
+    # compare_phase_times_run_rewrites("bv4", filter_data_rr("bv4"), legend_outside=True)
+    # compare_phase_times_run_rewrites("bv32", filter_data_rr("bv32"), legend_outside=True)
+    compare_run_rewrites(filter_data_rr("bv4"), "rr-bv4")
+    compare_run_rewrites(filter_data_rr("bv32"), "rr-bv32")
+    compare_run_rewrites_with_timeout("rational", filter_data_rr("rational"), [1000, 150, 10000], set_max=False)
+
+
+main()

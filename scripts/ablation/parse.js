@@ -3,7 +3,7 @@ const fs = require('fs');
 let data = [];
 let dataByType = {};
 
-let load_files = (base_folder, output_path) => {
+let load_files = (base_folder,  is_rr) => {
     // check if slash, add if none
 
     let phase_time = "phase-times";
@@ -11,6 +11,13 @@ let load_files = (base_folder, output_path) => {
     let mrat = "mrat";
     let default_conf = "default";
     let no_run_rewrites = "no-run-rewrites";
+
+    if (is_rr) {
+        load_dir(base_folder + "orat-default", "default",
+            () => load_dir(base_folder + "no-run-rewrites", "no-run-rewrites",
+                () => print_data(data)));
+        return;
+    }
 
     load_dir(base_folder + phase_time, "phase-times",
         () => load_dir(base_folder + default_conf, "default",
@@ -30,6 +37,9 @@ let load_dir = (path, type, k) => {
             console.log('lol');
         }
 
+        files_to_process = filenames.filter(str => str.endsWith(".log"));
+        console.log(files_to_process)
+
         // Use CPS so we know when all files are done 
         let process = (files, files_k) => {
             if (files.length == 0) {
@@ -39,7 +49,7 @@ let load_dir = (path, type, k) => {
             let file = files[0];
 
             fs.readFile(path + '/' + file, 'utf8', (err, text) => {
-
+                
                 let entry = make_entry(text);
                 entry.name = file;
                 entry.type = type;
@@ -51,7 +61,7 @@ let load_dir = (path, type, k) => {
             })
         }
 
-        process(filenames, k);
+        process(files_to_process, k);
     })
 }
 
@@ -143,5 +153,8 @@ let print_data = (data) => {
 
 console.log(process.cwd())
 input_folder = process.argv[2];
-output_path = "output/parsed.json";
-load_files(input_folder, output_path)
+output_path = process.argv[2] + "/parsed.json";
+// output_path = "output/parsed.json";
+let is_rr = process.argv[3]
+console.log(is_rr)
+load_files(input_folder, is_rr === "yes")

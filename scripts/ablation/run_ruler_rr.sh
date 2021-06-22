@@ -61,7 +61,6 @@ fi
 mkdir -p "$OUTPUT_DIR/orat-default";
 mkdir -p "$OUTPUT_DIR/no-run-rewrites";
 
-
 echo "Running phase-times..."
 for (( i=0; i<$NUM_RUNS; i++ ))
 do
@@ -84,5 +83,5 @@ do
   --do-final-run \
   --rules-to-take 1 $@ \
   --no-run-rewrites) &> "$OUTPUT_DIR/no-run-rewrites/${DOMAIN}_${NUM_VARIABLES}-${NUM_ITERS}_$i.log"
-  cp out.json "$OUTPUT_DIR/no-run-rewrites/${DOMAIN}_${NUM_VARIABLES}-${NUM_ITERS}_$i-out.json.log"
+  cp out.json "$OUTPUT_DIR/no-run-rewrites/${DOMAIN}_${NUM_VARIABLES}-${NUM_ITERS}_$i-out.json"
 done
