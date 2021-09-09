@@ -319,7 +319,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
         // run the rewrites
         log::info!("running eqsat with {} rules", self.equalities.len());
         let start = Instant::now();
-        let mut rewrites: Vec<&Rewrite<L, SynthAnalysis>> = self
+        let rewrites: Vec<&Rewrite<L, SynthAnalysis>> = self
             .equalities
             .values()
             .flat_map(|eq| &eq.rewrites)
@@ -722,7 +722,6 @@ pub struct SynthParams {
     /// For a final round of run_rewrites to remove redundant rules.
     #[clap(long)]
     pub do_final_run: bool,
-
 }
 
 /// Derivability report.
@@ -834,7 +833,7 @@ impl<L: SynthLanguage> egg::Analysis<L> for SynthAnalysis {
                         ord_merge(&mut ord, Ordering::Less);
                     }
                     (Some(x), Some(y)) => {
-                        assert_eq!(x, y, "cvecs do not match at index {}: {} != {}", i, x, y)
+                        assert_eq!(x, y, "cvecs do not match at index {}", i)
                     }
                     (Some(_), None) => {
                         ord_merge(&mut ord, Ordering::Greater);
@@ -860,6 +859,13 @@ impl<L: SynthLanguage> egg::Analysis<L> for SynthAnalysis {
 
     fn modify(egraph: &mut EGraph<L, Self>, id: Id) {
         let sig = &egraph[id].data;
+        use std::hash::Hasher;
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        id.hash(&mut h);
+        if 15053463213406696608 == h.finish() {
+            log::info!("test: {}, {}", id, h.finish());
+            log::info!("egraph: {:?}", egraph[id].nodes);
+        }
         if sig.exact {
             let first = sig.cvec.iter().find_map(|x| x.as_ref());
             if let Some(first) = first {
@@ -930,6 +936,8 @@ impl<L: SynthLanguage> Synthesizer<L> {
                 .values()
                 .flat_map(|eq| &eq.rewrites)
                 .chain(keepers.values().flat_map(|eq| &eq.rewrites));
+
+            log::info!("Rewrites: {:#?}", rewrites.clone().collect::<Vec<_>>());
 
             let mut runner = self.mk_runner(self.initial_egraph.clone());
             for candidate_eq in new_eqs.values() {

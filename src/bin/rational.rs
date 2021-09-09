@@ -146,6 +146,8 @@ impl SynthLanguage for Math {
         for row in consts.iter_mut() {
             let n_samples = synth.params.n_samples;
             let svals: Vec<Constant> = sampler(&mut synth.rng, 8, 6, n_samples);
+            println!("{}", n_samples);
+            println!("{:#?}", svals);
             let mut vals: Vec<Option<Constant>> = vec![];
             for v in svals {
                 vals.push(Some(v));
@@ -344,7 +346,7 @@ fn egg_to_z3<'a>(
     (buf.pop().unwrap(), assumes)
 }
 
-/// Entry point 
+/// Entry point
 fn main() {
     Math::main()
 }
