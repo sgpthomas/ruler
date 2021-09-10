@@ -31,7 +31,7 @@ impl Display for Value {
         match self {
             Value::Int(i) => write!(f, "{}", i),
             // Value::Bool(b) => write!(f, "{}", b),
-            Value::List(l) => write!(f, "[{:?}]", l),
+            Value::List(l) => write!(f, "{:?}", l),
             Value::Vec(v) => write!(f, "<{:?}>", v),
         }
     }
@@ -84,11 +84,11 @@ impl Value {
 
     fn vec2<F>(lhs: &Self, rhs: &Self, f: F) -> Option<Value>
     where
-        F: Fn(&[Value], &[Value]) -> Value,
+        F: Fn(&[Value], &[Value]) -> Option<Value>,
     {
         if let (Value::Vec(v1), Value::Vec(v2)) = (lhs, rhs) {
             if v1.len() == v2.len() {
-                Some(f(v1, v2))
+                f(v1, v2)
             } else {
                 None
             }
@@ -97,33 +97,64 @@ impl Value {
         }
     }
 
-    fn sampler(rng: &mut Pcg64, num_samples: usize) -> Vec<Value> {
-        let mut ret = vec![];
-
-        loop {
-            // 0 -> Int
-            // 1 -> Bool
-            let typ = rng.gen_range(1, 2);
-            let v = match typ {
-                0 => Value::Int(rng.gen_range(i32::MIN, i32::MAX)),
-                1 => Value::List(
-                    rng.sample_iter(&Uniform::from(-10..=10))
-                        .take(4)
-                        .map(|x| Value::Int(x))
-                        .collect::<Vec<_>>(),
-                ),
-                // 1 => Value::Bool(rng.gen_bool(0.5)),
-                _ => unreachable!(),
-            };
-            ret.push(v);
-
-            if ret.len() == num_samples {
-                break;
-            }
-        }
-
-        ret
+    fn vec2_op<F>(lhs: &Self, rhs: &Self, f: F) -> Option<Value>
+    where
+        F: Fn(&Value, &Value) -> Option<Value>,
+    {
+        Self::vec2(lhs, rhs, |lhs, rhs| {
+            lhs.iter()
+                .zip(rhs)
+                .map(|(l, r)| f(l, r))
+                .collect::<Option<Vec<Value>>>()
+                .map(|v| Value::List(v))
+        })
     }
+
+    fn sample_int(rng: &mut Pcg64, min: i32, max: i32, num_samples: usize) -> Vec<Value> {
+        (0..num_samples)
+            .map(|_| Value::Int(rng.gen_range(min, max)))
+            .collect::<Vec<_>>()
+    }
+
+    fn sample_list(
+        rng: &mut Pcg64,
+        min: i32,
+        max: i32,
+        list_size: usize,
+        num_samples: usize,
+    ) -> Vec<Value> {
+        (0..num_samples)
+            .map(|_| Value::List(Value::sample_int(rng, min, max, list_size)))
+            .collect::<Vec<_>>()
+    }
+
+    // fn sampler(rng: &mut Pcg64, num_samples: usize) -> Vec<Value> {
+    //     let mut ret = vec![];
+
+    //     loop {
+    //         // 0 -> Int
+    //         // 1 -> Bool
+    //         let typ = rng.gen_range(1, 2);
+    //         let v = match typ {
+    //             0 => Value::Int(rng.gen_range(i32::MIN, i32::MAX)),
+    //             1 => Value::List(
+    //                 rng.sample_iter(&Uniform::from(-10..=10))
+    //                     .take(4)
+    //                     .map(|x| Value::Int(x))
+    //                     .collect::<Vec<_>>(),
+    //             ),
+    //             // 1 => Value::Bool(rng.gen_bool(0.5)),
+    //             _ => unreachable!(),
+    //         };
+    //         ret.push(v);
+
+    //         if ret.len() == num_samples {
+    //             break;
+    //         }
+    //     }
+
+    //     ret
+    // }
 }
 
 fn sgn(x: i32) -> i32 {
@@ -269,33 +300,54 @@ impl SynthLanguage for VecLang {
             //     })
             //     .collect::<Vec<_>>(),
             // VecLang::Neg([x]) => map!(get, x => Value::int1(x, |x| Value::Int(-x))),
-            VecLang::List(l) => l
-                .iter()
-                .map(|el| {
-                    if get(el).contains(&None) {
-                        None
-                    } else {
-                        Some(Value::List(
-                            get(el)
-                                .iter()
-                                .map(|x| x.clone().unwrap())
-                                .collect::<Vec<_>>(),
-                        ))
-                    }
-                })
-                .collect::<Vec<_>>(),
-            VecLang::Vec(l) => l
-                .iter()
-                .map(|el| {
-                    if get(el).contains(&None) {
-                        None
-                    } else {
-                        Some(Value::Vec(
-                            get(el).iter().filter_map(|x| x.clone()).collect::<Vec<_>>(),
-                        ))
-                    }
-                })
-                .collect::<Vec<_>>(),
+            VecLang::List(l) => {
+                let x = l
+                    .iter()
+                    .fold(vec![Some(vec![]); l.len()], |mut acc, item| {
+                        acc.iter_mut().zip(get(item)).for_each(|(mut v, i)| {
+                            if let (Some(v), Some(i)) = (&mut v, i) {
+                                v.push(i.clone());
+                            } else {
+                                *v = None;
+                            }
+                        });
+                        acc
+                    })
+                    .into_iter()
+                    .map(|acc| {
+                        if let Some(x) = acc {
+                            Some(Value::List(x))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                x
+            }
+            VecLang::Vec(l) => {
+                let x = l
+                    .iter()
+                    .fold(vec![Some(vec![]); l.len()], |mut acc, item| {
+                        acc.iter_mut().zip(get(item)).for_each(|(mut v, i)| {
+                            if let (Some(v), Some(i)) = (&mut v, i) {
+                                v.push(i.clone());
+                            } else {
+                                *v = None;
+                            }
+                        });
+                        acc
+                    })
+                    .into_iter()
+                    .map(|acc| {
+                        if let Some(x) = acc {
+                            Some(Value::Vec(x))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                x
+            }
             // VecLang::LitVec(x) => todo!(),
             VecLang::Get([l, i]) => map!(get, l, i => {
                 if let (Value::Vec(v), Value::Int(idx)) = (l, i) {
@@ -307,24 +359,14 @@ impl SynthLanguage for VecLang {
                 }),
             VecLang::Concat([l, r]) => {
                 map!(get, l, r => Value::vec2(l, r, |l, r| {
-                    Value::Vec(l.iter().chain(r.iter()).cloned().collect::<Vec<_>>())
-                }))
+                Some(Value::List(l.iter().chain(r).cloned().collect::<Vec<_>>()))
+                    }))
             }
             VecLang::VecAdd([l, r]) => {
-                map!(get, l, r => Value::vec2(l, r, |l, r| {
-                    Value::Vec(l.iter().zip(r).map(|tup| match tup {
-                    (Value::Int(a), Value::Int(b)) => Value::Int(a + b),
-                        _ => panic!("Ill-formed")
-                    }).collect::<Vec<_>>())
-                }))
+                map!(get, l, r => Value::vec2_op(l, r, |l, r| Value::int2(l, r, |l, r| Value::Int(l + r))))
             }
             VecLang::VecMinus([l, r]) => {
-                map!(get, l, r => Value::vec2(l, r, |l, r| {
-                    Value::Vec(l.iter().zip(r).map(|tup| match tup {
-                    (Value::Int(a), Value::Int(b)) => Value::Int(a - b),
-                        _ => panic!("Ill-formed")
-                    }).collect::<Vec<_>>())
-                }))
+                map!(get, l, r => Value::vec2_op(l, r, |l, r| Value::int2(l, r, |l, r| Value::Int(l - r))))
             }
             // VecLang::VecMul([l, r]) => {
             //     map!(get, l, r => Value::vec2(l, r, |l, r| {
@@ -372,10 +414,12 @@ impl SynthLanguage for VecLang {
     }
 
     fn init_synth(synth: &mut Synthesizer<Self>) {
-        let consts: [Value; 0] = [
-            // Value::Int(-1),
-            // Value::Int(0),
-            // Value::Int(1),
+        let consts: [Value; 5] = [
+            Value::List(vec![]),
+            Value::Vec(vec![]),
+            Value::Int(-1),
+            Value::Int(0),
+            Value::Int(1),
             // Value::Bool(true),
             // Value::Bool(false),
         ];
@@ -385,10 +429,10 @@ impl SynthLanguage for VecLang {
             synth.params.variables,
         );
 
+        let size = consts_cross[0].len();
+
         // new egraph
-        let mut egraph = EGraph::new(SynthAnalysis {
-            cvec_len: consts_cross[0].len(),
-        });
+        let mut egraph = EGraph::new(SynthAnalysis { cvec_len: size });
 
         // add constants
         for v in consts.iter() {
@@ -399,14 +443,30 @@ impl SynthLanguage for VecLang {
         for i in 0..synth.params.variables {
             let var = egg::Symbol::from(letter(i));
             let id = egraph.add(VecLang::Symbol(var));
-            egraph[id].data.cvec = consts_cross[i].clone();
+
+            // make the cvec use real data
+            let mut cvec = vec![];
+
+            cvec.extend(
+                Value::sample_int(&mut synth.rng, -100, 100, size / 2)
+                    .into_iter()
+                    .map(Some),
+            );
+
+            cvec.extend(
+                Value::sample_list(&mut synth.rng, -100, 100, 2, (size / 2) + 1)
+                    .into_iter()
+                    .map(Some),
+            );
+
+            egraph[id].data.cvec = cvec;
         }
 
         // set egraph to the one we just constructed
         synth.egraph = egraph;
     }
 
-    fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Vec<Self> {
+    fn make_layer(synth: &Synthesizer<Self>, _iter: usize) -> Vec<Self> {
         let mut to_add = vec![];
         for i in synth.ids() {
             // one operand operators
@@ -481,10 +541,19 @@ impl SynthLanguage for VecLang {
 
         for cvec in env.values_mut() {
             cvec.reserve(n);
-            for s in Value::sampler(&mut synth.rng, n) {
-                cvec.push(Some(s));
-            }
+            cvec.extend(
+                Value::sample_int(&mut synth.rng, -100, 100, n / 2)
+                    .into_iter()
+                    .map(Some),
+            );
+
+            cvec.extend(
+                Value::sample_list(&mut synth.rng, -100, 100, 4, n / 2)
+                    .into_iter()
+                    .map(Some),
+            );
         }
+
         let lvec = Self::eval_pattern(lhs, &env, n);
         let rvec = Self::eval_pattern(rhs, &env, n);
 
