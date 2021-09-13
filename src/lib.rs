@@ -859,13 +859,13 @@ impl<L: SynthLanguage> egg::Analysis<L> for SynthAnalysis {
 
     fn modify(egraph: &mut EGraph<L, Self>, id: Id) {
         let sig = &egraph[id].data;
-        use std::hash::Hasher;
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        id.hash(&mut h);
-        if 15053463213406696608 == h.finish() {
-            log::info!("test: {}, {}", id, h.finish());
-            log::info!("egraph: {:?}", egraph[id].nodes);
-        }
+        // use std::hash::Hasher;
+        // let mut h = std::collections::hash_map::DefaultHasher::new();
+        // id.hash(&mut h);
+        // if 15053463213406696608 == h.finish() {
+        //     log::info!("test: {}, {}", id, h.finish());
+        //     log::info!("egraph: {:?}", egraph[id].nodes);
+        // }
         if sig.exact {
             let first = sig.cvec.iter().find_map(|x| x.as_ref());
             if let Some(first) = first {
