@@ -6,6 +6,7 @@ It uses equality saturation in two novel ways to scale the rule synthesis:
 !*/
 use clap::Clap;
 use egg::*;
+use itertools::Itertools;
 use rand::SeedableRng;
 use rand_pcg::Pcg64;
 use serde::{Deserialize, Serialize};
@@ -180,7 +181,13 @@ pub trait SynthLanguage: egg::Language + Send + Sync + 'static {
     fn init_synth(synth: &mut Synthesizer<Self>);
 
     /// Layer wise term enumeration in the egraph.
-    fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Vec<Self>;
+    fn make_layer<'a>(
+        ids: Vec<Id>,
+        egraph: &'a EGraph<Self, SynthAnalysis>,
+        iter: usize,
+    ) -> Box<dyn Iterator<Item = Self> + 'a>;
+    // fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Box<dyn Iterator<Item = Self> + '_>;
+    // fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Vec<Self>;
 
     /// Given a , `ctx`, i.e., mapping from variables to cvecs, evaluate a pattern, `pat`,
     /// on each element of the cvec.
@@ -281,7 +288,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
         let node_limit = self.params.eqsat_node_limit;
 
         let mut runner = Runner::default()
-            .with_node_limit(usize::MAX)
+            // .with_node_limit(usize::MAX)
             .with_hook(move |r| {
                 let size = r.egraph.total_number_of_nodes();
                 if size > node_limit {
@@ -474,38 +481,42 @@ impl<L: SynthLanguage> Synthesizer<L> {
         assert!(self.params.iters > 0);
         for iter in 1..=self.params.iters {
             log::info!("[[[ Iteration {} ]]]", iter);
-            let mut layer = L::make_layer(&self, iter);
 
-            layer.retain(|n| !n.all(|id| self.egraph[id].data.exact));
+            let egraph_copy = self.egraph.clone();
+            let layer = L::make_layer(self.ids().collect_vec(), &egraph_copy, iter);
 
-            if iter > self.params.no_constants_above_iter {
-                let mut extract = Extractor::new(&self.egraph, NumberOfOps);
+            // layer.retain(|n| !n.all(|id| self.egraph[id].data.exact));
 
-                // maps ids to n_ops
-                let has_constants: HashSet<Id> = self
-                    .ids()
-                    .filter_map(|id| {
-                        let (_cost, best) = extract.find_best(id);
-                        if best.as_ref().iter().any(|n| n.is_constant()) {
-                            Some(id)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
+            log::info!("{}", iter > self.params.no_constants_above_iter);
+            // if iter > self.params.no_constants_above_iter {
+            //     let mut extract = Extractor::new(&self.egraph, NumberOfOps);
 
-                layer.retain(|n| n.all(|id| !has_constants.contains(&id)));
-            }
+            //     // maps ids to n_ops
+            //     let has_constants: HashSet<Id> = self
+            //         .ids()
+            //         .filter_map(|id| {
+            //             let (_cost, best) = extract.find_best(id);
+            //             if best.as_ref().iter().any(|n| n.is_constant()) {
+            //                 Some(id)
+            //             } else {
+            //                 None
+            //             }
+            //         })
+            //         .collect();
 
-            log::info!("Made layer of {} nodes", layer.len());
-            for chunk in layer.chunks(self.params.chunk_size) {
+            //     layer.retain(|n| n.all(|id| !has_constants.contains(&id)));
+            // }
+
+            // log::info!("Made layer of {} nodes", layer.len());
+            log::info!("Made layer! Using chunk size: {}", self.params.chunk_size);
+            for chunk in &layer.chunks(self.params.chunk_size) {
                 log::info!(
                     "egraph n={}, e={}",
                     self.egraph.total_size(),
                     self.egraph.number_of_classes(),
                 );
                 for node in chunk {
-                    self.egraph.add(node.clone());
+                    self.egraph.add(node);
                 }
                 'inner: loop {
                     let run_rewrites_before = Instant::now();
@@ -936,8 +947,6 @@ impl<L: SynthLanguage> Synthesizer<L> {
                 .values()
                 .flat_map(|eq| &eq.rewrites)
                 .chain(keepers.values().flat_map(|eq| &eq.rewrites));
-
-            log::info!("Rewrites: {:#?}", rewrites.clone().collect::<Vec<_>>());
 
             let mut runner = self.mk_runner(self.initial_egraph.clone());
             for candidate_eq in new_eqs.values() {

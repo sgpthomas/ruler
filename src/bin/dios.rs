@@ -1,4 +1,5 @@
 use egg::{define_language, EGraph, Id};
+use itertools::Itertools;
 use num::integer::Roots;
 use rand::Rng;
 use rand_pcg::Pcg64;
@@ -440,59 +441,103 @@ impl SynthLanguage for VecLang {
         synth.egraph = egraph;
     }
 
-    fn make_layer(synth: &Synthesizer<Self>, _iter: usize) -> Vec<Self> {
-        let mut to_add = vec![];
-        for i in synth.ids() {
-            // one operand operators
-            if !synth.egraph[i].data.exact {
-                // to_add.push(VecLang::Sgn([i]));
-                // to_add.push(VecLang::Sqrt([i]));
-                // to_add.push(VecLang::Neg([i]));
+    fn make_layer<'a>(
+        ids: Vec<Id>,
+        egraph: &'a EGraph<Self, SynthAnalysis>,
+        _iter: usize,
+    ) -> Box<dyn Iterator<Item = Self> + 'a> {
+        let two = (0..2)
+            .map(|_| ids.clone())
+            .multi_cartesian_product()
+            .filter(move |ids| !ids.iter().all(|x| egraph[*x].data.exact))
+            .map(|ids| [ids[0], ids[1]])
+            .map(|x| {
+                vec![
+                    VecLang::Add(x),
+                    VecLang::Minus(x),
+                    VecLang::Mul(x),
+                    VecLang::Concat(x),
+                    VecLang::VecAdd(x),
+                    VecLang::VecMinus(x),
+                    // VecLang::Vec(Box::new(x)),
+                ]
+            })
+            .flatten();
 
-                // size 1 lists
-                // to_add.push(VecLang::List(Box::new([i])));
-                // to_add.push(VecLang::Vec(Box::new([i])));
-            }
+        let four = (0..4)
+            .map(|_| ids.clone())
+            .multi_cartesian_product()
+            .filter(move |ids| ids.iter().all(|x| !egraph[*x].data.exact))
+            .map(|ids| [ids[0], ids[1], ids[2], ids[3]])
+            .map(|x| vec![VecLang::Vec(Box::new(x))])
+            .flatten();
 
-            for j in synth.ids() {
-                // two operand operators
-                if !(synth.egraph[i].data.exact && synth.egraph[j].data.exact) {
-                    to_add.push(VecLang::Add([i, j]));
-                    to_add.push(VecLang::Mul([i, j]));
-                    to_add.push(VecLang::Minus([i, j]));
-                    // to_add.push(VecLang::Div([i, j]));
+        Box::new(two.chain(four))
 
-                    // to_add.push(VecLang::Or([i, j]));
-                    // to_add.push(VecLang::And([i, j]));
-                    // to_add.push(VecLang::Lt([i, j]));
+        // let mut to_add = vec![];
+        // log::info!("#ids: {}", synth.ids().count());
+        // for i in synth.ids() {
+        //     // one operand operators
+        //     if !synth.egraph[i].data.exact {
+        //         // to_add.push(VecLang::Sgn([i]));
+        //         // to_add.push(VecLang::Sqrt([i]));
+        //         // to_add.push(VecLang::Neg([i]));
 
-                    // to_add.push(VecLang::Get([i, j]));
-                    to_add.push(VecLang::Concat([i, j]));
-                    to_add.push(VecLang::VecAdd([i, j]));
-                    to_add.push(VecLang::VecMinus([i, j]));
-                    // to_add.push(VecLang::VecMul([i, j]));
-                    // to_add.push(VecLang::VecDiv([i, j]));
+        //         // size 1 lists
+        //         // to_add.push(VecLang::List(Box::new([i])));
+        //         // to_add.push(VecLang::Vec(Box::new([i])));
+        //     }
 
-                    // size two lists
-                    // to_add.push(VecLang::List(Box::new([i, j])));
-                    to_add.push(VecLang::Vec(Box::new([i, j])));
-                }
+        //     for j in synth.ids() {
+        //         // two operand operators
+        //         if !(synth.egraph[i].data.exact && synth.egraph[j].data.exact) {
+        //             to_add.push(VecLang::Add([i, j]));
+        //             to_add.push(VecLang::Mul([i, j]));
+        //             to_add.push(VecLang::Minus([i, j]));
+        //             // to_add.push(VecLang::Div([i, j]));
 
-                // for k in synth.ids() {
-                //     // size 3 operators
-                //     if !(synth.egraph[i].data.exact
-                //         && synth.egraph[j].data.exact
-                //         && synth.egraph[k].data.exact)
-                //     {
-                //         to_add.push(VecLang::List(Box::new([i, j, k])));
-                //         to_add.push(VecLang::Vec(Box::new([i, j, k])));
-                //     }
-                // }
-            }
-        }
+        //             // to_add.push(VecLang::Or([i, j]));
+        //             // to_add.push(VecLang::And([i, j]));
+        //             // to_add.push(VecLang::Lt([i, j]));
 
-        log::info!("Made a layer of {} enodes", to_add.len());
-        to_add
+        //             // to_add.push(VecLang::Get([i, j]));
+        //             to_add.push(VecLang::Concat([i, j]));
+        //             to_add.push(VecLang::VecAdd([i, j]));
+        //             to_add.push(VecLang::VecMinus([i, j]));
+        //             // to_add.push(VecLang::VecMul([i, j]));
+        //             // to_add.push(VecLang::VecDiv([i, j]));
+
+        //             // size two lists
+        //             // to_add.push(VecLang::List(Box::new([i, j])));
+        //             to_add.push(VecLang::Vec(Box::new([i, j])));
+        //         }
+
+        //         for k in synth.ids() {
+        //             for l in synth.ids() {
+        //                 if !(synth.egraph[i].data.exact
+        //                     && synth.egraph[j].data.exact
+        //                     && synth.egraph[k].data.exact
+        //                     && synth.egraph[l].data.exact)
+        //                 {
+        //                     to_add.push(VecLang::Vec(Box::new([i, j, k, l])));
+        //                 }
+        //             }
+        //         }
+        //         // for k in synth.ids() {
+        //         //     // size 3 operators
+        //         //     if !(synth.egraph[i].data.exact
+        //         //         && synth.egraph[j].data.exact
+        //         //         && synth.egraph[k].data.exact)
+        //         //     {
+        //         //         to_add.push(VecLang::List(Box::new([i, j, k])));
+        //         //         to_add.push(VecLang::Vec(Box::new([i, j, k])));
+        //         //     }
+        //         // }
+        //     }
+        // }
+
+        // log::info!("Made a layer of {} enodes", to_add.len());
+        // to_add
     }
 
     fn is_valid(
