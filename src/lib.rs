@@ -183,7 +183,7 @@ pub trait SynthLanguage: egg::Language + Send + Sync + 'static {
     /// Layer wise term enumeration in the egraph.
     fn make_layer<'a>(
         ids: Vec<Id>,
-        egraph: &'a EGraph<Self, SynthAnalysis>,
+        egraph: &'a Synthesizer<Self>,
         iter: usize,
     ) -> Box<dyn Iterator<Item = Self> + 'a>;
     // fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Box<dyn Iterator<Item = Self> + '_>;
@@ -253,6 +253,7 @@ pub trait SynthLanguage: egg::Language + Send + Sync + 'static {
 }
 
 /// A synthesizer for a given [SynthLanguage].
+#[derive(Clone)]
 pub struct Synthesizer<L: SynthLanguage> {
     pub params: SynthParams,
     pub rng: Pcg64,
@@ -288,7 +289,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
         let node_limit = self.params.eqsat_node_limit;
 
         let mut runner = Runner::default()
-            // .with_node_limit(usize::MAX)
+            .with_node_limit(usize::MAX)
             .with_hook(move |r| {
                 let size = r.egraph.total_number_of_nodes();
                 if size > node_limit {
@@ -398,7 +399,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
                         let (_, e1) = extract.find_best(id1);
                         let (_, e2) = extract.find_best(id2);
                         if let Some(mut eq) = Equality::new(&e1, &e2) {
-                            log::debug!("  Candidate {}", eq);
+                            log::info!("  Candidate {}", eq);
                             eq.ids = Some((id1, id2));
                             new_eqs.insert(eq.name.clone(), eq);
                         }
@@ -482,7 +483,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
         for iter in 1..=self.params.iters {
             log::info!("[[[ Iteration {} ]]]", iter);
 
-            let egraph_copy = self.egraph.clone();
+            let egraph_copy = self.clone();
             let layer = L::make_layer(self.ids().collect_vec(), &egraph_copy, iter);
 
             // layer.retain(|n| !n.all(|id| self.egraph[id].data.exact));
@@ -496,7 +497,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
             //         .ids()
             //         .filter_map(|id| {
             //             let (_cost, best) = extract.find_best(id);
-            //             if best.as_ref().iter().any(|n| n.is_constant()) {
+            //             if best.as_ref().iter().any(|n| n.is_constant())
             //                 Some(id)
             //             } else {
             //                 None
@@ -550,6 +551,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
                     let (eqs, bads) = if self.params.minimize {
                         self.minimize(new_eqs)
                     } else {
+                        log::info!("choose_eqs");
                         self.choose_eqs(new_eqs)
                     };
 
@@ -646,7 +648,7 @@ struct SlimReport<L: SynthLanguage> {
 }
 
 /// All parameters for rule synthesis.
-#[derive(Clap, Deserialize, Serialize)]
+#[derive(Clap, Deserialize, Serialize, Clone)]
 #[clap(rename_all = "kebab-case")]
 pub struct SynthParams {
     /// Seed for random number generator, used for random cvec value generation
@@ -733,6 +735,9 @@ pub struct SynthParams {
     /// For a final round of run_rewrites to remove redundant rules.
     #[clap(long)]
     pub do_final_run: bool,
+    /// Vector size
+    #[clap(long)]
+    pub vector_size: usize,
 }
 
 /// Derivability report.

@@ -387,8 +387,10 @@ impl SynthLanguage for VecLang {
     }
 
     fn init_synth(synth: &mut Synthesizer<Self>) {
-        let consts: [Value; 3] = [
+        let consts: [Value; 5] = [
             // Value::List(vec![]),
+            Value::Vec(vec![Value::Int(0); synth.params.vector_size]),
+            Value::Vec(vec![Value::Int(1); synth.params.vector_size]),
             // Value::Vec(vec![]),
             Value::Int(-1),
             Value::Int(0),
@@ -396,6 +398,18 @@ impl SynthLanguage for VecLang {
             // Value::Bool(true),
             // Value::Bool(false),
         ];
+
+        // initial set of rewrite rules
+        let iso_add: ruler::Equality<VecLang> = ruler::Equality::new(
+            &"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap(),
+            &"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap(),
+        )
+        .unwrap();
+        let comm_add: ruler::Equality<VecLang> =
+            ruler::Equality::new(&"(+ ?a ?b)".parse().unwrap(), &"(+ ?b ?a)".parse().unwrap())
+                .unwrap();
+        synth.equalities.insert("iso_add".into(), iso_add);
+        synth.equalities.insert("comm_add".into(), comm_add);
 
         let consts_cross = self_product(
             &consts.iter().map(|x| Some(x.clone())).collect::<Vec<_>>(),
@@ -443,36 +457,44 @@ impl SynthLanguage for VecLang {
 
     fn make_layer<'a>(
         ids: Vec<Id>,
-        egraph: &'a EGraph<Self, SynthAnalysis>,
+        synth: &'a Synthesizer<Self>,
         _iter: usize,
     ) -> Box<dyn Iterator<Item = Self> + 'a> {
-        let two = (0..2)
+        let binops = (0..2)
             .map(|_| ids.clone())
             .multi_cartesian_product()
-            .filter(move |ids| !ids.iter().all(|x| egraph[*x].data.exact))
+            .filter(move |ids| !ids.iter().all(|x| synth.egraph[*x].data.exact))
             .map(|ids| [ids[0], ids[1]])
             .map(|x| {
                 vec![
                     VecLang::Add(x),
-                    VecLang::Minus(x),
-                    VecLang::Mul(x),
-                    VecLang::Concat(x),
+                    // VecLang::Minus(x),
+                    // VecLang::Mul(x),
+                    // VecLang::Concat(x),
                     VecLang::VecAdd(x),
-                    VecLang::VecMinus(x),
-                    // VecLang::Vec(Box::new(x)),
+                    // VecLang::VecMinus(x),
+                    VecLang::Vec(Box::new(x)),
                 ]
             })
             .flatten();
 
-        let four = (0..4)
+        let vec = (0..synth.params.vector_size)
             .map(|_| ids.clone())
             .multi_cartesian_product()
-            .filter(move |ids| ids.iter().all(|x| !egraph[*x].data.exact))
-            .map(|ids| [ids[0], ids[1], ids[2], ids[3]])
-            .map(|x| vec![VecLang::Vec(Box::new(x))])
+            .filter(move |ids| !ids.iter().all(|x| synth.egraph[*x].data.exact))
+            .map(|x| vec![VecLang::Vec(x.into_boxed_slice())])
             .flatten();
 
-        Box::new(two.chain(four))
+        // let four = (0..4)
+        //     .map(|_| ids.clone())
+        //     .multi_cartesian_product()
+        //     .filter(move |ids| ids.iter().all(|x| !egraph[*x].data.exact))
+        //     .map(|ids| [ids[0], ids[1], ids[2], ids[3]])
+        //     .map(|x| vec![VecLang::Vec(Box::new(x))])
+        //     .flatten();
+
+        // Box::new(two.chain(four))
+        Box::new(binops.chain(vec))
 
         // let mut to_add = vec![];
         // log::info!("#ids: {}", synth.ids().count());
@@ -596,7 +618,17 @@ impl SynthLanguage for VecLang {
         let lvec = Self::eval_pattern(lhs, &env, n);
         let rvec = Self::eval_pattern(rhs, &env, n);
 
-        lvec == rvec
+        if lvec != rvec {
+            log::debug!("  env: {:?}", env);
+            log::debug!("  lhs: {}, rhs: {}", lhs, rhs);
+            log::debug!("  lvec: {:?}, rvec: {:?}", lvec, rvec);
+        }
+
+        // only compare values where both sides are defined
+        lvec.iter().zip(rvec.iter()).all(|tup| match tup {
+            (Some(l), Some(r)) => l == r,
+            _ => true,
+        })
     }
 }
 
