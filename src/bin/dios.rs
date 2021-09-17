@@ -4,15 +4,21 @@ use num::integer::Roots;
 use rand::Rng;
 use rand_pcg::Pcg64;
 use ruler::{letter, map, self_product, CVec, SynthAnalysis, SynthLanguage, Synthesizer};
+use rustc_hash::FxHasher;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::hash::BuildHasherDefault;
 use std::str::FromStr;
 
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Clone)]
 pub enum Value {
+    // starts with i
     Int(i32),
+    // starts with [
     List(Vec<Value>),
+    // starts with <
     Vec(Vec<Value>),
+    // starts with b
     Bool(bool),
 }
 
@@ -20,7 +26,13 @@ impl FromStr for Value {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        Err(format!("{} didn't match anything.", s))
+        log::info!("{}", s);
+        if s.starts_with("i") {
+            let v: i32 = s[1..].parse().map_err(|_| "Bad integer.".to_string())?;
+            Ok(Value::Int(v))
+        } else {
+            Err(format!("{} didn't match anything.", s))
+        }
     }
 }
 
@@ -147,8 +159,6 @@ fn sgn(x: i32) -> i32 {
 
 define_language! {
     pub enum VecLang {
-        Const(Value),
-
         // Id is a key to identify EClasses within an EGraph, represents
         // children nodes
         "+" = Add([Id; 2]),
@@ -193,6 +203,8 @@ define_language! {
 
         // MAC takes 3 lists: acc, v1, v2
         // "VecMAC" = VecMAC([Id; 3]),
+
+        Const(Value),
 
         // language items are parsed in order, and we want symbol to
         // be a fallback, so we put it last.
@@ -387,12 +399,12 @@ impl SynthLanguage for VecLang {
     }
 
     fn init_synth(synth: &mut Synthesizer<Self>) {
-        let consts: [Value; 5] = [
+        let consts: [Value; 2] = [
             // Value::List(vec![]),
-            Value::Vec(vec![Value::Int(0); synth.params.vector_size]),
-            Value::Vec(vec![Value::Int(1); synth.params.vector_size]),
+            // Value::Vec(vec![Value::Int(0); synth.params.vector_size]),
+            // Value::Vec(vec![Value::Int(1); synth.params.vector_size]),
             // Value::Vec(vec![]),
-            Value::Int(-1),
+            // Value::Int(-1),
             Value::Int(0),
             Value::Int(1),
             // Value::Bool(true),
@@ -400,15 +412,25 @@ impl SynthLanguage for VecLang {
         ];
 
         // initial set of rewrite rules
+        // let iso_add: ruler::Equality<VecLang> = ruler::Equality::new(
+        //     &"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap(),
+        //     &"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap(),
+        // )
+        // .unwrap();
+        // synth.equalities.insert("iso_add".into(), iso_add);
+
         let iso_add: ruler::Equality<VecLang> = ruler::Equality::new(
-            &"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap(),
-            &"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap(),
+            &"(VecAdd ?a ?b)".parse().unwrap(),
+            &"(VecAdd (Vec (Get ?a i0) (Get ?a i1)) (Vec (Get ?b i0) (Get ?b i1)))"
+                .parse()
+                .unwrap(),
         )
         .unwrap();
+        synth.equalities.insert("iso_add".into(), iso_add);
+
         let comm_add: ruler::Equality<VecLang> =
             ruler::Equality::new(&"(+ ?a ?b)".parse().unwrap(), &"(+ ?b ?a)".parse().unwrap())
                 .unwrap();
-        synth.equalities.insert("iso_add".into(), iso_add);
         synth.equalities.insert("comm_add".into(), comm_add);
 
         let consts_cross = self_product(
@@ -431,6 +453,13 @@ impl SynthLanguage for VecLang {
             let var = egg::Symbol::from(letter(i));
             let id = egraph.add(VecLang::Symbol(var));
 
+            // add gets for each variable
+            // for l in 0..synth.params.vector_size {
+            //     let idx_id = egraph.add(VecLang::Const(Value::Int(l as i32)));
+            //     log::info!("(GET {} {}) {:?}", var, l, VecLang::Get([id, idx_id]));
+            //     egraph.add(VecLang::Get([id, idx_id]));
+            // }
+
             // make the cvec use real data
             let mut cvec = vec![];
 
@@ -443,7 +472,7 @@ impl SynthLanguage for VecLang {
             );
 
             cvec.extend(
-                Value::sample_vec(&mut synth.rng, -100, 100, synth.params.num_fuzz, n_vecs)
+                Value::sample_vec(&mut synth.rng, -100, 100, synth.params.vector_size, n_vecs)
                     .into_iter()
                     .map(Some),
             );
@@ -473,7 +502,6 @@ impl SynthLanguage for VecLang {
                     // VecLang::Concat(x),
                     VecLang::VecAdd(x),
                     // VecLang::VecMinus(x),
-                    VecLang::Vec(Box::new(x)),
                 ]
             })
             .flatten();
@@ -485,81 +513,7 @@ impl SynthLanguage for VecLang {
             .map(|x| vec![VecLang::Vec(x.into_boxed_slice())])
             .flatten();
 
-        // let four = (0..4)
-        //     .map(|_| ids.clone())
-        //     .multi_cartesian_product()
-        //     .filter(move |ids| ids.iter().all(|x| !egraph[*x].data.exact))
-        //     .map(|ids| [ids[0], ids[1], ids[2], ids[3]])
-        //     .map(|x| vec![VecLang::Vec(Box::new(x))])
-        //     .flatten();
-
-        // Box::new(two.chain(four))
         Box::new(binops.chain(vec))
-
-        // let mut to_add = vec![];
-        // log::info!("#ids: {}", synth.ids().count());
-        // for i in synth.ids() {
-        //     // one operand operators
-        //     if !synth.egraph[i].data.exact {
-        //         // to_add.push(VecLang::Sgn([i]));
-        //         // to_add.push(VecLang::Sqrt([i]));
-        //         // to_add.push(VecLang::Neg([i]));
-
-        //         // size 1 lists
-        //         // to_add.push(VecLang::List(Box::new([i])));
-        //         // to_add.push(VecLang::Vec(Box::new([i])));
-        //     }
-
-        //     for j in synth.ids() {
-        //         // two operand operators
-        //         if !(synth.egraph[i].data.exact && synth.egraph[j].data.exact) {
-        //             to_add.push(VecLang::Add([i, j]));
-        //             to_add.push(VecLang::Mul([i, j]));
-        //             to_add.push(VecLang::Minus([i, j]));
-        //             // to_add.push(VecLang::Div([i, j]));
-
-        //             // to_add.push(VecLang::Or([i, j]));
-        //             // to_add.push(VecLang::And([i, j]));
-        //             // to_add.push(VecLang::Lt([i, j]));
-
-        //             // to_add.push(VecLang::Get([i, j]));
-        //             to_add.push(VecLang::Concat([i, j]));
-        //             to_add.push(VecLang::VecAdd([i, j]));
-        //             to_add.push(VecLang::VecMinus([i, j]));
-        //             // to_add.push(VecLang::VecMul([i, j]));
-        //             // to_add.push(VecLang::VecDiv([i, j]));
-
-        //             // size two lists
-        //             // to_add.push(VecLang::List(Box::new([i, j])));
-        //             to_add.push(VecLang::Vec(Box::new([i, j])));
-        //         }
-
-        //         for k in synth.ids() {
-        //             for l in synth.ids() {
-        //                 if !(synth.egraph[i].data.exact
-        //                     && synth.egraph[j].data.exact
-        //                     && synth.egraph[k].data.exact
-        //                     && synth.egraph[l].data.exact)
-        //                 {
-        //                     to_add.push(VecLang::Vec(Box::new([i, j, k, l])));
-        //                 }
-        //             }
-        //         }
-        //         // for k in synth.ids() {
-        //         //     // size 3 operators
-        //         //     if !(synth.egraph[i].data.exact
-        //         //         && synth.egraph[j].data.exact
-        //         //         && synth.egraph[k].data.exact)
-        //         //     {
-        //         //         to_add.push(VecLang::List(Box::new([i, j, k])));
-        //         //         to_add.push(VecLang::Vec(Box::new([i, j, k])));
-        //         //     }
-        //         // }
-        //     }
-        // }
-
-        // log::info!("Made a layer of {} enodes", to_add.len());
-        // to_add
     }
 
     fn is_valid(
@@ -591,7 +545,7 @@ impl SynthLanguage for VecLang {
             );
 
             cvec.extend(
-                Value::sample_vec(&mut synth.rng, -100, 100, 4, n_vecs)
+                Value::sample_vec(&mut synth.rng, -100, 100, synth.params.vector_size, n_vecs)
                     .into_iter()
                     .map(Some),
             );
@@ -599,6 +553,12 @@ impl SynthLanguage for VecLang {
 
         // let left: Pattern<VecLang> = "(Vec (+ ?a ?b) (+ ?c ?d))".parse().unwrap();
         // let right: Pattern<VecLang> = "(VecAdd (Vec ?a ?c) (Vec ?b ?d))".parse().unwrap();
+        // debug(
+        //     "(VecAdd (Vec ?a ?b) (Vec ?b ?a))",
+        //     "(Vec (+ ?a ?b) (+ ?a ?b))",
+        //     n,
+        //     &env,
+        // );
 
         // let test_env: HashMap<egg::Var, Vec<Option<Value>>, BuildHasherDefault<_>> = vec![
         //     ("?a".parse().unwrap(), vec![Some(Value::Int(1))]),
@@ -625,11 +585,34 @@ impl SynthLanguage for VecLang {
         }
 
         // only compare values where both sides are defined
-        lvec.iter().zip(rvec.iter()).all(|tup| match tup {
-            (Some(l), Some(r)) => l == r,
-            _ => true,
-        })
+        if lvec.iter().all(|x| x.is_none()) && rvec.iter().all(|x| x.is_none()) {
+            false
+        } else {
+            lvec.iter().zip(rvec.iter()).all(|tup| match tup {
+                (Some(l), Some(r)) => l == r,
+                _ => true,
+            })
+        }
     }
+}
+
+fn debug(
+    left: &str,
+    right: &str,
+    n: usize,
+    env: &HashMap<egg::Var, Vec<Option<Value>>, BuildHasherDefault<FxHasher>>,
+) {
+    let pleft: egg::Pattern<VecLang> = left.parse().unwrap();
+    let pright: egg::Pattern<VecLang> = right.parse().unwrap();
+    let lres = VecLang::eval_pattern(&pleft, env, n);
+    let rres = VecLang::eval_pattern(&pright, env, n);
+    log::info!(
+        "TEST:\n  {:?}\n    ?= ({})\n  {:?}",
+        lres,
+        lres == rres,
+        rres
+    );
+    panic!();
 }
 
 fn main() {

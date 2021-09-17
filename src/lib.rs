@@ -399,7 +399,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
                         let (_, e1) = extract.find_best(id1);
                         let (_, e2) = extract.find_best(id2);
                         if let Some(mut eq) = Equality::new(&e1, &e2) {
-                            log::info!("  Candidate {}", eq);
+                            log::debug!("  Candidate {}", eq);
                             eq.ids = Some((id1, id2));
                             new_eqs.insert(eq.name.clone(), eq);
                         }
@@ -488,7 +488,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
 
             // layer.retain(|n| !n.all(|id| self.egraph[id].data.exact));
 
-            log::info!("{}", iter > self.params.no_constants_above_iter);
+            // log::info!("{}", iter > self.params.no_constants_above_iter);
             // if iter > self.params.no_constants_above_iter {
             //     let mut extract = Extractor::new(&self.egraph, NumberOfOps);
 
