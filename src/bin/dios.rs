@@ -1,4 +1,4 @@
-use egg::{define_language, EGraph, Id};
+use egg::{define_language, rewrite, EGraph, Id, SimpleScheduler};
 use itertools::Itertools;
 use num::integer::Roots;
 use rand::Rng;
@@ -26,7 +26,6 @@ impl FromStr for Value {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        log::info!("{}", s);
         if s.starts_with("i") {
             let v: i32 = s[1..].parse().map_err(|_| "Bad integer.".to_string())?;
             Ok(Value::Int(v))
@@ -419,14 +418,14 @@ impl SynthLanguage for VecLang {
         // .unwrap();
         // synth.equalities.insert("iso_add".into(), iso_add);
 
-        let iso_add: ruler::Equality<VecLang> = ruler::Equality::new(
-            &"(VecAdd ?a ?b)".parse().unwrap(),
-            &"(VecAdd (Vec (Get ?a i0) (Get ?a i1)) (Vec (Get ?b i0) (Get ?b i1)))"
-                .parse()
-                .unwrap(),
-        )
-        .unwrap();
-        synth.equalities.insert("iso_add".into(), iso_add);
+        // let iso_add: ruler::Equality<VecLang> = ruler::Equality::new(
+        //     &"(VecAdd ?a ?b)".parse().unwrap(),
+        //     &"(VecAdd (Vec (Get ?a i0) (Get ?a i1)) (Vec (Get ?b i0) (Get ?b i1)))"
+        //         .parse()
+        //         .unwrap(),
+        // )
+        // .unwrap();
+        // synth.equalities.insert("iso_add".into(), iso_add);
 
         let comm_add: ruler::Equality<VecLang> =
             ruler::Equality::new(&"(+ ?a ?b)".parse().unwrap(), &"(+ ?b ?a)".parse().unwrap())
@@ -442,6 +441,39 @@ impl SynthLanguage for VecLang {
 
         // new egraph
         let mut egraph = EGraph::new(SynthAnalysis { cvec_len: size });
+
+        let a = egraph.add_expr(&"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap());
+        let b = egraph.add_expr(&"(VecAdd (Vec ?a ?d) (Vec ?c ?b))".parse().unwrap());
+        egraph.add_expr(&"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap());
+        egraph.add_expr(&"(Vec (+ ?a ?c) (+ ?d ?b))".parse().unwrap());
+        egraph.add_expr(&"(+ ?a ?b)".parse().unwrap());
+        egraph.add_expr(&"(+ ?b ?a)".parse().unwrap());
+
+        let rewrites = vec![
+            rewrite!("add-comm"; "(+ ?a ?b)" <=> "(+ ?b ?a)"),
+            rewrite!("add-vec-iso";
+		     "(VecAdd (Vec ?a ?b) (Vec ?c ?d))" <=> "(Vec (+ ?a ?c) (+ ?b ?d))"),
+        ]
+        .concat();
+
+        log::info!("before {:?} ?= {:?}", egraph.find(a), egraph.find(b));
+
+        let runner = egg::Runner::default()
+            .with_iter_limit(10)
+            .with_node_limit(10_000)
+            .with_egraph(egraph)
+            .with_scheduler(SimpleScheduler)
+            .run(&rewrites);
+
+        runner.egraph.dot().to_png("play.png").unwrap();
+
+        log::info!(
+            "after {:?} ?= {:?}",
+            runner.egraph.find(a),
+            runner.egraph.find(b)
+        );
+
+        panic!();
 
         // add constants
         for v in consts.iter() {
