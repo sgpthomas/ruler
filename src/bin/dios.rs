@@ -41,7 +41,14 @@ impl Display for Value {
             Value::Int(i) => write!(f, "{}", i),
             Value::Bool(b) => write!(f, "{}", b),
             Value::List(l) => write!(f, "{:?}", l),
-            Value::Vec(v) => write!(f, "<{:?}>", v),
+            Value::Vec(v) => write!(
+                f,
+                "<{}>",
+                v.into_iter()
+                    .map(|x| format!("{}", x))
+                    .collect_vec()
+                    .join(",")
+            ),
         }
     }
 }
@@ -410,13 +417,54 @@ impl SynthLanguage for VecLang {
             // Value::Bool(false),
         ];
 
+        add_eq(
+            synth,
+            "1",
+            "(+ (+ ?a ?b) (+ ?c ?d))",
+            "(+ (+ ?c ?b) (+ ?a ?d))",
+        );
+        add_eq(synth, "2", "(+ ?a ?b)", "(+ ?b ?a)");
+        add_eq(synth, "3", "?a", "(+ ?a i0)");
+
         // initial set of rewrite rules
+        // let assoc_add: ruler::Equality<VecLang> = ruler::Equality::new(
+        //     &"(+ (+ ?a ?b) ?c)".parse().unwrap(),
+        //     &"(+ ?a (+ ?b ?c))".parse().unwrap(),
+        // )
+        // .unwrap();
+        // synth.equalities.insert("assoc_add".into(), assoc_add);
+
         // let iso_add: ruler::Equality<VecLang> = ruler::Equality::new(
         //     &"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap(),
         //     &"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap(),
         // )
         // .unwrap();
         // synth.equalities.insert("iso_add".into(), iso_add);
+
+        add_eq(
+            synth,
+            "iso_add_n3",
+            "(VecAdd ?a ?b)",
+            "(VecAdd (Vec (Get ?a i0) (Get ?a i1)) 
+                     (Vec (Get ?b i0) (Get ?b i1)))",
+        );
+        // add_eq(
+        //     synth,
+        //     "iso_add_n3",
+        //     "(VecAdd ?a (VecAdd ?b ?c))",
+        //     "(VecAdd (Vec (Get ?a i0) (Get ?a i1) (Get ?a i2))
+        //              (VecAdd (Vec (Get ?b i0) (Get ?b i1) (Get ?b i2))
+        //                      (Vec (Get ?c i0) (Get ?c i1) (Get ?c i2))))",
+        // );
+        add_eq(
+            synth,
+            "assoc_add",
+            "(VecAdd (VecAdd ?a ?b) ?c)",
+            "(VecAdd ?a (VecAdd ?b ?c))",
+        );
+
+        add_eq(synth, "get0", "(Get (Vec ?a ?b) i0)", "?a");
+        add_eq(synth, "get1", "(Get (Vec ?a ?b) i1)", "?b");
 
         // let iso_add: ruler::Equality<VecLang> = ruler::Equality::new(
         //     &"(VecAdd ?a ?b)".parse().unwrap(),
@@ -427,10 +475,36 @@ impl SynthLanguage for VecLang {
         // .unwrap();
         // synth.equalities.insert("iso_add".into(), iso_add);
 
-        let comm_add: ruler::Equality<VecLang> =
-            ruler::Equality::new(&"(+ ?a ?b)".parse().unwrap(), &"(+ ?b ?a)".parse().unwrap())
-                .unwrap();
-        synth.equalities.insert("comm_add".into(), comm_add);
+        // let comm_add: ruler::Equality<VecLang> =
+        //     ruler::Equality::new(&"(+ ?a ?b)".parse().unwrap(), &"(+ ?b ?a)".parse().unwrap())
+        //         .unwrap();
+        // synth.equalities.insert("comm_add".into(), comm_add);
+        // let assoc_add: ruler::Equality<VecLang> = ruler::Equality::new(
+        //     &"(+ ?a (+ ?b ?c))".parse().unwrap(),
+        //     &"(+ (+ ?a ?b) ?c)".parse().unwrap(),
+        // )
+        // .unwrap();
+        // synth.equalities.insert("assoc_add".into(), assoc_add);
+
+        // let get_vec: ruler::Equality<VecLang> = ruler::Equality::new(
+        //     &"(VecAdd ?a (VecAdd ?b ?c))".parse().unwrap(),
+        //     &"(Vec (+ (Get ?a i0) (+ (Get ?b i0) (Get ?c i0)))
+        //            (+ (Get ?a i1) (+ (Get ?b i1) (Get ?c i1)))
+        //            (+ (Get ?a i2) (+ (Get ?b i2) (Get ?c i2))))"
+        //         .parse()
+        //         .unwrap(),
+        // )
+        // .unwrap();
+        // synth.equalities.insert("get_vec".into(), get_vec);
+
+        // let assoc_vec_add: ruler::Equality<VecLang> = ruler::Equality::new(
+        //     &"(VecAdd ?a (VecAdd ?b ?c))".parse().unwrap(),
+        //     &"(VecAdd (VecAdd ?a ?b) ?c)".parse().unwrap(),
+        // )
+        // .unwrap();
+        // synth
+        //     .equalities
+        //     .insert("assoc_vec_add".into(), assoc_vec_add);
 
         let consts_cross = self_product(
             &consts.iter().map(|x| Some(x.clone())).collect::<Vec<_>>(),
@@ -440,40 +514,56 @@ impl SynthLanguage for VecLang {
         let size = consts_cross[0].len();
 
         // new egraph
-        let mut egraph = EGraph::new(SynthAnalysis { cvec_len: size });
 
-        let a = egraph.add_expr(&"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap());
-        let b = egraph.add_expr(&"(VecAdd (Vec ?a ?d) (Vec ?c ?b))".parse().unwrap());
-        egraph.add_expr(&"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap());
-        egraph.add_expr(&"(Vec (+ ?a ?c) (+ ?d ?b))".parse().unwrap());
-        egraph.add_expr(&"(+ ?a ?b)".parse().unwrap());
-        egraph.add_expr(&"(+ ?b ?a)".parse().unwrap());
+        // let rewrites: Vec<egg::Rewrite<VecLang, SynthAnalysis>> = vec![
+        //     rewrite!("add-comm"; "(+ ?a ?b)" <=> "(+ ?b ?a)"),
+        //     rewrite!("add-vec-iso";
+        // 	     "(VecAdd (Vec ?a ?b) (Vec ?c ?d))" <=> "(Vec (+ ?a ?c) (+ ?b ?d))"),
+        // ]
+        // .concat();
 
-        let rewrites = vec![
-            rewrite!("add-comm"; "(+ ?a ?b)" <=> "(+ ?b ?a)"),
-            rewrite!("add-vec-iso";
-		     "(VecAdd (Vec ?a ?b) (Vec ?c ?d))" <=> "(Vec (+ ?a ?c) (+ ?b ?d))"),
-        ]
-        .concat();
+        // let mut runner = egg::Runner::default()
+        //     .with_iter_limit(10)
+        //     .with_node_limit(10_000)
+        //     .with_scheduler(SimpleScheduler);
 
-        log::info!("before {:?} ?= {:?}", egraph.find(a), egraph.find(b));
+        // runner = runner.with_expr(&"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap());
+        // runner = runner.with_expr(&"(Vec (+ ?a ?c) (+ ?d ?b))".parse().unwrap());
+        // runner = runner.with_expr(&"(+ ?a ?b)".parse().unwrap());
+        // runner = runner.with_expr(&"(+ ?b ?a)".parse().unwrap());
 
-        let runner = egg::Runner::default()
-            .with_iter_limit(10)
-            .with_node_limit(10_000)
-            .with_egraph(egraph)
-            .with_scheduler(SimpleScheduler)
-            .run(&rewrites);
+        // log::info!(
+        //     "before {:?} ?= {:?}",
+        //     runner.egraph.find(runner.roots[0]),
+        //     runner.egraph.find(runner.roots[1])
+        // );
+        // runner = runner.run(&rewrites);
+        // log::info!(
+        //     "after {:?} ?= {:?}",
+        //     runner.egraph.find(runner.roots[0]),
+        //     runner.egraph.find(runner.roots[1])
+        // );
 
-        runner.egraph.dot().to_png("play.png").unwrap();
+        // runner.egraph.dot().to_png("play.png").unwrap();
 
-        log::info!(
-            "after {:?} ?= {:?}",
-            runner.egraph.find(a),
-            runner.egraph.find(b)
-        );
+        // log::info!("runner roots: {:?}", runner.roots);
 
-        panic!();
+        // let mut extract = egg::Extractor::new(&runner.egraph, egg::AstSize);
+        // for ids in runner.roots.iter().combinations(2) {
+        //     let l = *ids[0];
+        //     let r = *ids[1];
+        //     log::info!("{} <=?=> {}", l, r);
+        //     if runner.egraph.find(l) != runner.egraph.find(r) {
+        //         let (lcost, left) = extract.find_best(l);
+        //         let (rcost, right) = extract.find_best(r);
+        //         log::info!("lcost: {:?}, rcost: {:?}", lcost, rcost);
+        //         log::info!("{} <=> {}", left, right);
+        //     }
+        // }
+
+        // panic!();
+
+        let mut egraph = egg::EGraph::new(SynthAnalysis { cvec_len: size });
 
         // add constants
         for v in consts.iter() {
@@ -626,6 +716,12 @@ impl SynthLanguage for VecLang {
             })
         }
     }
+}
+
+fn add_eq(synth: &mut Synthesizer<VecLang>, name: &str, left: &str, right: &str) {
+    let rule: ruler::Equality<VecLang> =
+        ruler::Equality::new(&left.parse().unwrap(), &right.parse().unwrap()).unwrap();
+    synth.equalities.insert(name.into(), rule);
 }
 
 fn debug(

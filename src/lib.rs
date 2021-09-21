@@ -953,10 +953,15 @@ impl<L: SynthLanguage> Synthesizer<L> {
                 .flat_map(|eq| &eq.rewrites)
                 .chain(keepers.values().flat_map(|eq| &eq.rewrites));
 
+            for eq in rewrites.clone() {
+                log::info!("rewrites: {}", eq.name);
+            }
+
             let mut runner = self.mk_runner(self.initial_egraph.clone());
             for candidate_eq in new_eqs.values() {
                 runner = runner.with_expr(&L::instantiate(&candidate_eq.lhs));
                 runner = runner.with_expr(&L::instantiate(&candidate_eq.rhs));
+                log::info!("{} <=?=> {}", candidate_eq.lhs, candidate_eq.rhs);
             }
 
             runner = runner.run(rewrites);
