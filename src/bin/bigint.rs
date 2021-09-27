@@ -82,7 +82,7 @@ impl SynthLanguage for Math {
             .iter()
             .map(|s| s.parse().unwrap())
             .collect();
-        
+
         let mut consts: Vec<Option<Constant>> = vec![];
 
         for i in 0..synth.params.important_cvec_offsets {
@@ -132,27 +132,35 @@ impl SynthLanguage for Math {
         synth.egraph = egraph;
     }
 
-    fn make_layer(synth: &Synthesizer<Self>, _iter: usize) -> Vec<Self> {
-        let mut to_add = vec![];
-        for i in synth.ids() {
-            for j in synth.ids() {
-                if synth.egraph[i].data.exact && synth.egraph[j].data.exact {
-                    continue;
-                }
-                to_add.push(Math::Add([i, j]));
-                to_add.push(Math::Sub([i, j]));
-                to_add.push(Math::Mul([i, j]));
-                to_add.push(Math::Div([i, j]));
-            }
-            if synth.egraph[i].data.exact {
-                continue;
-            }
-            to_add.push(Math::Neg(i));
-        }
-
-        log::info!("Made a layer of {} enodes", to_add.len());
-        to_add
+    fn make_layer<'a>(
+        _ids: Vec<Id>,
+        _synth: &'a Synthesizer<Self>,
+        _iter: usize,
+    ) -> Box<dyn Iterator<Item = Self> + 'a> {
+        todo!()
     }
+
+    // fn make_layer(synth: &Synthesizer<Self>, _iter: usize) -> Vec<Self> {
+    //     let mut to_add = vec![];
+    //     for i in synth.ids() {
+    //         for j in synth.ids() {
+    //             if synth.egraph[i].data.exact && synth.egraph[j].data.exact {
+    //                 continue;
+    //             }
+    //             to_add.push(Math::Add([i, j]));
+    //             to_add.push(Math::Sub([i, j]));
+    //             to_add.push(Math::Mul([i, j]));
+    //             to_add.push(Math::Div([i, j]));
+    //         }
+    //         if synth.egraph[i].data.exact {
+    //             continue;
+    //         }
+    //         to_add.push(Math::Neg(i));
+    //     }
+
+    //     log::info!("Made a layer of {} enodes", to_add.len());
+    //     to_add
+    // }
 
     fn is_valid(
         synth: &mut Synthesizer<Self>,

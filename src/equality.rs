@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// Definition of an equality.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "SerializedEq")]
 #[serde(into = "SerializedEq")]
 #[serde(bound = "L: SynthLanguage")]

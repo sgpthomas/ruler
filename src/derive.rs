@@ -82,7 +82,7 @@ fn one_way<L: SynthLanguage>(
 
         let mut results = results.lock().unwrap();
 
-        print!(
+        eprint!(
             "\r{} rules are derivable, {} are not.",
             results.0.len(),
             results.1.len(),
@@ -96,7 +96,7 @@ fn one_way<L: SynthLanguage>(
     });
 
     let results = results.into_inner().unwrap();
-    println!(
+    eprintln!(
         "\r{} rules are derivable, {} are not.",
         results.0.len(),
         results.1.len(),

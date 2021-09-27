@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::*;
 
-
 /// General bitvector implementation.
 #[derive(Copy, Clone, Hash, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -269,48 +268,56 @@ macro_rules! impl_bv {
                 synth.egraph = egraph;
             }
 
-            fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Vec<Self> {
-                let mut extract = Extractor::new(&synth.egraph, NumberOfOps);
+	    fn make_layer<'a>(
+		_ids: Vec<Id>,
+		_synth: &'a Synthesizer<Self>,
+		_iter: usize,
+	    ) -> Box<dyn Iterator<Item = Self> + 'a> {
+		todo!()
+	    }
 
-                // maps ids to n_ops
-                let ids: HashMap<Id, usize> = synth
-                    .ids()
-                    .map(|id| (id, extract.find_best_cost(id)))
-                    .collect();
+            // fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Vec<Self> {
+            //     let mut extract = Extractor::new(&synth.egraph, NumberOfOps);
 
-                let mut to_add = vec![];
-                for i in synth.ids() {
-                    for j in synth.ids() {
-                        if ids[&i] + ids[&j] + 1 != iter {
-                            continue;
-                        }
+            //     // maps ids to n_ops
+            //     let ids: HashMap<Id, usize> = synth
+            //         .ids()
+            //         .map(|id| (id, extract.find_best_cost(id)))
+            //         .collect();
 
-                        to_add.push(Math::Add([i, j]));
-                        to_add.push(Math::Sub([i, j]));
-                        to_add.push(Math::Mul([i, j]));
+            //     let mut to_add = vec![];
+            //     for i in synth.ids() {
+            //         for j in synth.ids() {
+            //             if ids[&i] + ids[&j] + 1 != iter {
+            //                 continue;
+            //             }
 
-                        if !synth.params.no_shift {
-                            to_add.push(Math::Shl([i, j]));
-                            to_add.push(Math::Shr([i, j]));
-                        }
+            //             to_add.push(Math::Add([i, j]));
+            //             to_add.push(Math::Sub([i, j]));
+            //             to_add.push(Math::Mul([i, j]));
 
-                        to_add.push(Math::And([i, j]));
-                        to_add.push(Math::Or([i, j]));
-                        // if !synth.params.no_xor {
-                        //     to_add.push(Math::Xor([i, j]));
-                        // }
-                    }
-                    if ids[&i] + 1 != iter {
-                        continue;
-                    }
+            //             if !synth.params.no_shift {
+            //                 to_add.push(Math::Shl([i, j]));
+            //                 to_add.push(Math::Shr([i, j]));
+            //             }
 
-                    to_add.push(Math::Not(i));
-                    to_add.push(Math::Neg(i));
-                }
+            //             to_add.push(Math::And([i, j]));
+            //             to_add.push(Math::Or([i, j]));
+            //             // if !synth.params.no_xor {
+            //             //     to_add.push(Math::Xor([i, j]));
+            //             // }
+            //         }
+            //         if ids[&i] + 1 != iter {
+            //             continue;
+            //         }
 
-                log::info!("Made a layer of {} enodes", to_add.len());
-                to_add
-            }
+            //         to_add.push(Math::Not(i));
+            //         to_add.push(Math::Neg(i));
+            //     }
+
+            //     log::info!("Made a layer of {} enodes", to_add.len());
+            //     to_add
+            // }
 
 
             fn is_valid(

@@ -174,29 +174,37 @@ impl SynthLanguage for Math {
         synth.egraph = egraph;
     }
 
-    /// Term enumeration.
-    fn make_layer(synth: &Synthesizer<Self>, _iter: usize) -> Vec<Self> {
-        let mut to_add = vec![];
-        for i in synth.ids() {
-            for j in synth.ids() {
-                if synth.egraph[i].data.exact && synth.egraph[j].data.exact {
-                    continue;
-                }
-                to_add.push(Math::Add([i, j]));
-                to_add.push(Math::Sub([i, j]));
-                to_add.push(Math::Mul([i, j]));
-                to_add.push(Math::Div([i, j]));
-            }
-            if synth.egraph[i].data.exact {
-                continue;
-            }
-            to_add.push(Math::Abs(i));
-            to_add.push(Math::Neg(i));
-        }
-
-        log::info!("Made a layer of {} enodes", to_add.len());
-        to_add
+    fn make_layer<'a>(
+        _ids: Vec<Id>,
+        _synth: &'a Synthesizer<Self>,
+        _iter: usize,
+    ) -> Box<dyn Iterator<Item = Self> + 'a> {
+        todo!()
     }
+
+    // /// Term enumeration.
+    // fn make_layer(synth: &Synthesizer<Self>, _iter: usize) -> Vec<Self> {
+    //     let mut to_add = vec![];
+    //     for i in synth.ids() {
+    //         for j in synth.ids() {
+    //             if synth.egraph[i].data.exact && synth.egraph[j].data.exact {
+    //                 continue;
+    //             }
+    //             to_add.push(Math::Add([i, j]));
+    //             to_add.push(Math::Sub([i, j]));
+    //             to_add.push(Math::Mul([i, j]));
+    //             to_add.push(Math::Div([i, j]));
+    //         }
+    //         if synth.egraph[i].data.exact {
+    //             continue;
+    //         }
+    //         to_add.push(Math::Abs(i));
+    //         to_add.push(Math::Neg(i));
+    //     }
+
+    //     log::info!("Made a layer of {} enodes", to_add.len());
+    //     to_add
+    // }
 
     /// Check the validity of a rewrite rule.
     /// Depending on the value of `use_smt`, it either uses

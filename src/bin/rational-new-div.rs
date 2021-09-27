@@ -171,30 +171,38 @@ impl SynthLanguage for Math {
         synth.egraph = egraph;
     }
 
-    fn make_layer(synth: &Synthesizer<Self>, _iter: usize) -> Vec<Self> {
-        let mut to_add = vec![];
-        for i in synth.ids() {
-            for j in synth.ids() {
-                if synth.egraph[i].data.exact && synth.egraph[j].data.exact {
-                    continue;
-                }
-                to_add.push(Math::Add([i, j]));
-                to_add.push(Math::Sub([i, j]));
-                to_add.push(Math::Mul([i, j]));
-                to_add.push(Math::Div([i, j]));
-                // to_add.push(Math::Pow([i, j]));
-            }
-            if synth.egraph[i].data.exact {
-                continue;
-            }
-            to_add.push(Math::Abs(i));
-            to_add.push(Math::Neg(i));
-            // to_add.push(Math::Reciprocal(i));
-        }
-
-        log::info!("Made a layer of {} enodes", to_add.len());
-        to_add
+    fn make_layer<'a>(
+        _ids: Vec<Id>,
+        _synth: &'a Synthesizer<Self>,
+        _iter: usize,
+    ) -> Box<dyn Iterator<Item = Self> + 'a> {
+        todo!()
     }
+
+    // fn make_layer(synth: &Synthesizer<Self>, _iter: usize) -> Vec<Self> {
+    //     let mut to_add = vec![];
+    //     for i in synth.ids() {
+    //         for j in synth.ids() {
+    //             if synth.egraph[i].data.exact && synth.egraph[j].data.exact {
+    //                 continue;
+    //             }
+    //             to_add.push(Math::Add([i, j]));
+    //             to_add.push(Math::Sub([i, j]));
+    //             to_add.push(Math::Mul([i, j]));
+    //             to_add.push(Math::Div([i, j]));
+    //             // to_add.push(Math::Pow([i, j]));
+    //         }
+    //         if synth.egraph[i].data.exact {
+    //             continue;
+    //         }
+    //         to_add.push(Math::Abs(i));
+    //         to_add.push(Math::Neg(i));
+    //         // to_add.push(Math::Reciprocal(i));
+    //     }
+
+    //     log::info!("Made a layer of {} enodes", to_add.len());
+    //     to_add
+    // }
 
     fn is_valid(
         synth: &mut Synthesizer<Self>,
@@ -252,8 +260,6 @@ impl SynthLanguage for Math {
         }
     }
 }
-
-	
 
 /// Return a randomply sampled BigInt that is not 0
 // randomly sample so that they are not 0

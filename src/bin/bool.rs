@@ -96,36 +96,43 @@ impl SynthLanguage for Math {
         synth.egraph = egraph;
     }
 
-    fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Vec<Self> {
-        let mut extract = Extractor::new(&synth.egraph, NumberOfOps);
-
-        // maps ids to n_ops
-        let ids: HashMap<Id, usize> = synth
-            .ids()
-            .map(|id| (id, extract.find_best_cost(id)))
-            .collect();
-
-        let mut to_add = vec![];
-        for i in synth.ids() {
-            for j in synth.ids() {
-                if ids[&i] + ids[&j] + 1 != iter {
-                    continue;
-                }
-                to_add.push(Math::And([i, j]));
-                to_add.push(Math::Or([i, j]));
-                if !synth.params.no_xor {
-                    to_add.push(Math::Xor([i, j]));
-                }
-            }
-            if ids[&i] + 1 != iter {
-                continue;
-            }
-            to_add.push(Math::Not(i));
-        }
-
-        log::info!("Made a layer of {} enodes", to_add.len());
-        to_add
+    fn make_layer<'a>(
+        _ids: Vec<Id>,
+        _synth: &'a Synthesizer<Self>,
+        _iter: usize,
+    ) -> Box<dyn Iterator<Item = Self> + 'a> {
+        todo!()
     }
+    // fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Vec<Self> {
+    //     let mut extract = Extractor::new(&synth.egraph, NumberOfOps);
+
+    //     // maps ids to n_ops
+    //     let ids: HashMap<Id, usize> = synth
+    //         .ids()
+    //         .map(|id| (id, extract.find_best_cost(id)))
+    //         .collect();
+
+    //     let mut to_add = vec![];
+    //     for i in synth.ids() {
+    //         for j in synth.ids() {
+    //             if ids[&i] + ids[&j] + 1 != iter {
+    //                 continue;
+    //             }
+    //             to_add.push(Math::And([i, j]));
+    //             to_add.push(Math::Or([i, j]));
+    //             if !synth.params.no_xor {
+    //                 to_add.push(Math::Xor([i, j]));
+    //             }
+    //         }
+    //         if ids[&i] + 1 != iter {
+    //             continue;
+    //         }
+    //         to_add.push(Math::Not(i));
+    //     }
+
+    //     log::info!("Made a layer of {} enodes", to_add.len());
+    //     to_add
+    // }
 
     fn is_valid(
         _synth: &mut Synthesizer<Self>,

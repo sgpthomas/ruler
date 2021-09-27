@@ -262,73 +262,81 @@ impl SynthLanguage for Lang {
         synth.egraph = egraph;
     }
 
-    fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Vec<Self> {
-        let mut extract = Extractor::new(&synth.egraph, NumberOfOps);
-
-        // maps ids to n_ops
-        let ids: HashMap<Id, usize> = synth
-            .ids()
-            .map(|id| (id, extract.find_best_cost(id)))
-            .collect();
-
-        let is_str = |&id: &Id| -> bool {
-            match synth.egraph[id].data.cvec[0] {
-                Some(Constant::Num(_)) => false,
-                Some(Constant::Str(_)) => true,
-                None => panic!(),
-            }
-        };
-        let is_num = |id: &Id| !is_str(id);
-
-        let mut to_add = vec![];
-        for a in synth.ids().filter(is_str) {
-            if ids[&a] + 1 == iter {
-                to_add.push(Lang::ToInt(a));
-                to_add.push(Lang::Len(a));
-            }
-            for b in synth.ids().filter(is_str) {
-                for c in synth.ids().filter(is_str) {
-                    if ids[&a] + ids[&b] + ids[&c] + 1 == iter {
-                        to_add.push(Lang::Replace([a, b, c]));
-                    }
-                }
-
-                if ids[&a] + ids[&b] + 1 == iter {
-                    to_add.push(Lang::Concat([a, b]));
-                }
-
-                for i in synth.ids().filter(is_num) {
-                    if ids[&a] + ids[&b] + ids[&i] + 1 == iter {
-                        to_add.push(Lang::IndexOf([a, b, i]));
-                    }
-                }
-            }
-            for i in synth.ids().filter(is_num) {
-                for j in synth.ids().filter(is_num) {
-                    if ids[&a] + ids[&i] + ids[&j] + 1 == iter {
-                        to_add.push(Lang::SubStr([a, i, j]));
-                    }
-                }
-                if ids[&a] + ids[&i] + 1 == iter {
-                    to_add.push(Lang::At([a, i]));
-                }
-            }
-        }
-        for i in synth.ids().filter(is_num) {
-            if ids[&i] + 1 == iter {
-                to_add.push(Lang::FromInt(i));
-            }
-            for j in synth.ids().filter(is_num) {
-                if ids[&i] + ids[&j] + 1 == iter {
-                    to_add.push(Lang::Add([i, j]));
-                    to_add.push(Lang::Sub([i, j]));
-                }
-            }
-        }
-
-        log::info!("Made a layer of {} enodes", to_add.len());
-        to_add
+    fn make_layer<'a>(
+        _ids: Vec<Id>,
+        _synth: &'a Synthesizer<Self>,
+        _iter: usize,
+    ) -> Box<dyn Iterator<Item = Self> + 'a> {
+        todo!()
     }
+
+    // fn make_layer(synth: &Synthesizer<Self>, iter: usize) -> Vec<Self> {
+    //     let mut extract = Extractor::new(&synth.egraph, NumberOfOps);
+
+    //     // maps ids to n_ops
+    //     let ids: HashMap<Id, usize> = synth
+    //         .ids()
+    //         .map(|id| (id, extract.find_best_cost(id)))
+    //         .collect();
+
+    //     let is_str = |&id: &Id| -> bool {
+    //         match synth.egraph[id].data.cvec[0] {
+    //             Some(Constant::Num(_)) => false,
+    //             Some(Constant::Str(_)) => true,
+    //             None => panic!(),
+    //         }
+    //     };
+    //     let is_num = |id: &Id| !is_str(id);
+
+    //     let mut to_add = vec![];
+    //     for a in synth.ids().filter(is_str) {
+    //         if ids[&a] + 1 == iter {
+    //             to_add.push(Lang::ToInt(a));
+    //             to_add.push(Lang::Len(a));
+    //         }
+    //         for b in synth.ids().filter(is_str) {
+    //             for c in synth.ids().filter(is_str) {
+    //                 if ids[&a] + ids[&b] + ids[&c] + 1 == iter {
+    //                     to_add.push(Lang::Replace([a, b, c]));
+    //                 }
+    //             }
+
+    //             if ids[&a] + ids[&b] + 1 == iter {
+    //                 to_add.push(Lang::Concat([a, b]));
+    //             }
+
+    //             for i in synth.ids().filter(is_num) {
+    //                 if ids[&a] + ids[&b] + ids[&i] + 1 == iter {
+    //                     to_add.push(Lang::IndexOf([a, b, i]));
+    //                 }
+    //             }
+    //         }
+    //         for i in synth.ids().filter(is_num) {
+    //             for j in synth.ids().filter(is_num) {
+    //                 if ids[&a] + ids[&i] + ids[&j] + 1 == iter {
+    //                     to_add.push(Lang::SubStr([a, i, j]));
+    //                 }
+    //             }
+    //             if ids[&a] + ids[&i] + 1 == iter {
+    //                 to_add.push(Lang::At([a, i]));
+    //             }
+    //         }
+    //     }
+    //     for i in synth.ids().filter(is_num) {
+    //         if ids[&i] + 1 == iter {
+    //             to_add.push(Lang::FromInt(i));
+    //         }
+    //         for j in synth.ids().filter(is_num) {
+    //             if ids[&i] + ids[&j] + 1 == iter {
+    //                 to_add.push(Lang::Add([i, j]));
+    //                 to_add.push(Lang::Sub([i, j]));
+    //             }
+    //         }
+    //     }
+
+    //     log::info!("Made a layer of {} enodes", to_add.len());
+    //     to_add
+    // }
 
     fn is_valid(
         _synth: &mut Synthesizer<Self>,

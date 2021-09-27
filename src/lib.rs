@@ -25,6 +25,7 @@ use std::{hash::BuildHasherDefault, sync::Arc};
 mod bv;
 mod convert_sexp;
 mod derive;
+pub mod dios;
 mod equality;
 mod util;
 
@@ -613,12 +614,12 @@ impl<L: SynthLanguage> Synthesizer<L> {
             self.params.no_conditionals = old;
         }
 
-        println!("Learned {} rules in {:?}", num_rules, time);
+        eprintln!("Learned {} rules in {:?}", num_rules, time);
         for eq in &eqs {
             // println!("  {:?}   {}", eq.score(), eq);
-            println!("{}", eq);
+            eprintln!("{}", eq);
         }
-        println!("Learned {} rules in {:?}", num_rules, time);
+        eprintln!("Learned {} rules in {:?}", num_rules, time);
         Report {
             params: self.params,
             time,
@@ -630,7 +631,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
 }
 
 /// Reports for each run of Ruler.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(bound = "L: SynthLanguage")]
 pub struct Report<L: SynthLanguage> {
     pub params: SynthParams,
@@ -648,7 +649,7 @@ struct SlimReport<L: SynthLanguage> {
 }
 
 /// All parameters for rule synthesis.
-#[derive(Clap, Deserialize, Serialize, Clone)]
+#[derive(Debug, Clap, Deserialize, Serialize, Clone)]
 #[clap(rename_all = "kebab-case")]
 pub struct SynthParams {
     /// Seed for random number generator, used for random cvec value generation

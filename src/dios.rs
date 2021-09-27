@@ -1,9 +1,9 @@
-use egg::{define_language, rewrite, EGraph, Id, SimpleScheduler};
+use crate::{letter, map, self_product, CVec, Equality, SynthAnalysis, SynthLanguage, Synthesizer};
+use egg::{define_language, Id};
 use itertools::Itertools;
 use num::integer::Roots;
 use rand::Rng;
 use rand_pcg::Pcg64;
-use ruler::{letter, map, self_product, CVec, SynthAnalysis, SynthLanguage, Synthesizer};
 use rustc_hash::FxHasher;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -417,14 +417,14 @@ impl SynthLanguage for VecLang {
             // Value::Bool(false),
         ];
 
-        add_eq(
-            synth,
-            "1",
-            "(+ (+ ?a ?b) (+ ?c ?d))",
-            "(+ (+ ?c ?b) (+ ?a ?d))",
-        );
-        add_eq(synth, "2", "(+ ?a ?b)", "(+ ?b ?a)");
-        add_eq(synth, "3", "?a", "(+ ?a i0)");
+        // add_eq(
+        //     synth,
+        //     "1",
+        //     "(+ (+ ?a ?b) (+ ?c ?d))",
+        //     "(+ (+ ?c ?b) (+ ?a ?d))",
+        // );
+        // add_eq(synth, "2", "(+ ?a ?b)", "(+ ?b ?a)");
+        // add_eq(synth, "3", "?a", "(+ ?a i0)");
 
         // initial set of rewrite rules
         // let assoc_add: ruler::Equality<VecLang> = ruler::Equality::new(
@@ -441,13 +441,14 @@ impl SynthLanguage for VecLang {
         // .unwrap();
         // synth.equalities.insert("iso_add".into(), iso_add);
 
-        add_eq(
-            synth,
-            "iso_add_n3",
-            "(VecAdd ?a ?b)",
-            "(VecAdd (Vec (Get ?a i0) (Get ?a i1)) 
-                     (Vec (Get ?b i0) (Get ?b i1)))",
-        );
+        // add_eq(
+        //     synth,
+        //     "iso_add_n3",
+        //     "(VecAdd ?a ?b)",
+        //     "(VecAdd (Vec (Get ?a i0) (Get ?a i1))
+        //              (Vec (Get ?b i0) (Get ?b i1)))",
+        // );
+
         // add_eq(
         //     synth,
         //     "iso_add_n3",
@@ -456,15 +457,16 @@ impl SynthLanguage for VecLang {
         //              (VecAdd (Vec (Get ?b i0) (Get ?b i1) (Get ?b i2))
         //                      (Vec (Get ?c i0) (Get ?c i1) (Get ?c i2))))",
         // );
-        add_eq(
-            synth,
-            "assoc_add",
-            "(VecAdd (VecAdd ?a ?b) ?c)",
-            "(VecAdd ?a (VecAdd ?b ?c))",
-        );
+        // add_eq(
+        //     synth,
+        //     "assoc_add",
+        //     "(VecAdd (VecAdd ?a ?b) ?c)",
+        //     "(VecAdd ?a (VecAdd ?b ?c))",
+        // );
 
-        add_eq(synth, "get0", "(Get (Vec ?a ?b) i0)", "?a");
-        add_eq(synth, "get1", "(Get (Vec ?a ?b) i1)", "?b");
+        // add_eq(synth, "get0", "(Get (Vec ?a ?b ?c) i0)", "?a");
+        // add_eq(synth, "get1", "(Get (Vec ?a ?b ?c) i1)", "?b");
+        // add_eq(synth, "get1", "(Get (Vec ?a ?b ?c) i2)", "?c");
 
         // let iso_add: ruler::Equality<VecLang> = ruler::Equality::new(
         //     &"(VecAdd ?a ?b)".parse().unwrap(),
@@ -575,13 +577,6 @@ impl SynthLanguage for VecLang {
             let var = egg::Symbol::from(letter(i));
             let id = egraph.add(VecLang::Symbol(var));
 
-            // add gets for each variable
-            // for l in 0..synth.params.vector_size {
-            //     let idx_id = egraph.add(VecLang::Const(Value::Int(l as i32)));
-            //     log::info!("(GET {} {}) {:?}", var, l, VecLang::Get([id, idx_id]));
-            //     egraph.add(VecLang::Get([id, idx_id]));
-            // }
-
             // make the cvec use real data
             let mut cvec = vec![];
 
@@ -619,11 +614,11 @@ impl SynthLanguage for VecLang {
             .map(|x| {
                 vec![
                     VecLang::Add(x),
-                    // VecLang::Minus(x),
+                    VecLang::Minus(x),
                     // VecLang::Mul(x),
                     // VecLang::Concat(x),
                     VecLang::VecAdd(x),
-                    // VecLang::VecMinus(x),
+                    VecLang::VecMinus(x),
                 ]
             })
             .flatten();
@@ -636,6 +631,7 @@ impl SynthLanguage for VecLang {
             .flatten();
 
         Box::new(binops.chain(vec))
+        // Box::new(binops)
     }
 
     fn is_valid(
@@ -719,8 +715,8 @@ impl SynthLanguage for VecLang {
 }
 
 fn add_eq(synth: &mut Synthesizer<VecLang>, name: &str, left: &str, right: &str) {
-    let rule: ruler::Equality<VecLang> =
-        ruler::Equality::new(&left.parse().unwrap(), &right.parse().unwrap()).unwrap();
+    let rule: Equality<VecLang> =
+        Equality::new(&left.parse().unwrap(), &right.parse().unwrap()).unwrap();
     synth.equalities.insert(name.into(), rule);
 }
 
@@ -743,8 +739,8 @@ fn debug(
     panic!();
 }
 
-fn main() {
-    VecLang::main()
-}
+// fn main() {
+//     VecLang::main()
+// }
 
 // 132289, 15053463213406696608
