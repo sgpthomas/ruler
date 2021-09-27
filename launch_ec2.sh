@@ -15,3 +15,5 @@ aws ec2 describe-instances \
   --query "Reservations[*].Instances[*].PublicDnsName" \
   --output=text
 
+aws ec2 describe-images --owner self
+
