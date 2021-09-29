@@ -262,6 +262,7 @@ pub struct Synthesizer<L: SynthLanguage> {
     initial_egraph: EGraph<L, SynthAnalysis>,
     pub equalities: EqualityMap<L>,
     pub smt_unknown: usize,
+    start_time: Instant,
 }
 
 impl<L: SynthLanguage> Synthesizer<L> {
@@ -274,10 +275,21 @@ impl<L: SynthLanguage> Synthesizer<L> {
             equalities: Default::default(),
             smt_unknown: 0,
             params,
+            start_time: Instant::now(),
         };
         L::init_synth(&mut synth);
         synth.initial_egraph = synth.egraph.clone();
         synth
+    }
+
+    fn check_time(&self) -> bool {
+        let t = self.start_time;
+        self.params.abs_timeout > 0
+            && t.elapsed() > Duration::from_secs(self.params.abs_timeout as u64)
+    }
+
+    fn time_left(&self) -> Duration {
+        Duration::from_secs(self.params.abs_timeout as u64) - self.start_time.elapsed()
     }
 
     /// Get the eclass ids for all eclasses in the egraph.
@@ -301,7 +313,8 @@ impl<L: SynthLanguage> Synthesizer<L> {
             })
             .with_node_limit(self.params.eqsat_node_limit * 2)
             .with_iter_limit(self.params.eqsat_iter_limit)
-            .with_time_limit(Duration::from_secs(self.params.eqsat_time_limit))
+            // .with_time_limit(Duration::from_secs(self.params.eqsat_time_limit))
+            .with_time_limit(self.time_left())
             .with_scheduler(SimpleScheduler);
         runner = if self.params.no_conditionals {
             egraph.analysis.cvec_len = 0;
@@ -481,7 +494,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
         let mut poison_rules: HashSet<Equality<L>> = HashSet::default();
         let t = Instant::now();
         assert!(self.params.iters > 0);
-        for iter in 1..=self.params.iters {
+        'outer: for iter in 1..=self.params.iters {
             log::info!("[[[ Iteration {} ]]]", iter);
 
             let egraph_copy = self.clone();
@@ -510,6 +523,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
             // }
 
             // log::info!("Made layer of {} nodes", layer.len());
+
             log::info!("Made layer! Using chunk size: {}", self.params.chunk_size);
             for chunk in &layer.chunks(self.params.chunk_size) {
                 log::info!(
@@ -518,9 +532,17 @@ impl<L: SynthLanguage> Synthesizer<L> {
                     self.egraph.number_of_classes(),
                 );
                 for node in chunk {
+                    if self.check_time() {
+                        break 'outer;
+                    }
                     self.egraph.add(node);
                 }
                 'inner: loop {
+                    // abort if it's been longer than abs_timeout
+                    if self.check_time() {
+                        break 'outer;
+                    }
+
                     let run_rewrites_before = Instant::now();
                     if !self.params.no_run_rewrites {
                         self.run_rewrites();
@@ -661,6 +683,12 @@ pub struct SynthParams {
     /// Number of variables to add to the initial egraph
     #[clap(long, default_value = "3")]
     pub variables: usize,
+    /// Vector size
+    #[clap(long)]
+    pub vector_size: usize,
+    /// Absolute timeout
+    #[clap(long, default_value = "0")]
+    pub abs_timeout: usize,
 
     ///////////////////
     // search params //
@@ -736,9 +764,6 @@ pub struct SynthParams {
     /// For a final round of run_rewrites to remove redundant rules.
     #[clap(long)]
     pub do_final_run: bool,
-    /// Vector size
-    #[clap(long)]
-    pub vector_size: usize,
 }
 
 /// Derivability report.
@@ -907,12 +932,20 @@ impl<L: SynthLanguage> Synthesizer<L> {
         let mut bads = EqualityMap::default();
         let initial_len = new_eqs.len();
         while !new_eqs.is_empty() {
+            if self.check_time() {
+                break;
+            }
+
             // best are last
             new_eqs.sort_by(|_, eq1, _, eq2| eq1.score().cmp(&eq2.score()));
 
             // take step valid rules from the end of new_eqs
             let mut took = 0;
             while let Some((name, eq)) = new_eqs.pop() {
+                if self.check_time() {
+                    break;
+                }
+
                 if should_validate {
                     let rule_validation = Instant::now();
                     let valid = L::is_valid(self, &eq.lhs, &eq.rhs);
@@ -1006,6 +1039,10 @@ impl<L: SynthLanguage> Synthesizer<L> {
         let mut bads = EqualityMap::default();
         let mut should_validate = true;
         for step in vec![100, 10, 1] {
+            if self.check_time() {
+                break;
+            }
+
             if self.params.rules_to_take < step {
                 continue;
             }
