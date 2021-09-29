@@ -434,12 +434,12 @@ impl SynthLanguage for VecLang {
         // .unwrap();
         // synth.equalities.insert("assoc_add".into(), assoc_add);
 
-        // let iso_add: ruler::Equality<VecLang> = ruler::Equality::new(
-        //     &"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap(),
-        //     &"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap(),
-        // )
-        // .unwrap();
-        // synth.equalities.insert("iso_add".into(), iso_add);
+        let iso_add: Equality<VecLang> = Equality::new(
+            &"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap(),
+            &"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap(),
+        )
+        .unwrap();
+        synth.equalities.insert("iso_add".into(), iso_add);
 
         // add_eq(
         //     synth,
@@ -601,37 +601,55 @@ impl SynthLanguage for VecLang {
         synth.egraph = egraph;
     }
 
+    /// Plan for `make_layer`
+    /// even iter
+    ///   normal binary ops
+    /// odd iter
+    ///   depth 1 and depth 2 vector operations
     fn make_layer<'a>(
         ids: Vec<Id>,
         synth: &'a Synthesizer<Self>,
-        _iter: usize,
+        iter: usize,
     ) -> Box<dyn Iterator<Item = Self> + 'a> {
-        let binops = (0..2)
-            .map(|_| ids.clone())
-            .multi_cartesian_product()
-            .filter(move |ids| !ids.iter().all(|x| synth.egraph[*x].data.exact))
-            .map(|ids| [ids[0], ids[1]])
-            .map(|x| {
-                vec![
-                    VecLang::Add(x),
-                    VecLang::Minus(x),
-                    // VecLang::Mul(x),
-                    // VecLang::Concat(x),
-                    VecLang::VecAdd(x),
-                    VecLang::VecMinus(x),
-                ]
-            })
-            .flatten();
+        if iter % 2 == 0 {
+            let binops = (0..2)
+                .map(|_| ids.clone())
+                .multi_cartesian_product()
+                .filter(move |ids| !ids.iter().all(|x| synth.egraph[*x].data.exact))
+                .map(|ids| [ids[0], ids[1]])
+                .map(|x| {
+                    vec![
+                        VecLang::Add(x),
+                        VecLang::Minus(x),
+                        // VecLang::Mul(x),
+                    ]
+                })
+                .flatten();
+            Box::new(binops)
+        } else {
+            let binops = (0..2)
+                .map(|_| ids.clone())
+                .multi_cartesian_product()
+                .filter(move |ids| !ids.iter().all(|x| synth.egraph[*x].data.exact))
+                .map(|ids| [ids[0], ids[1]])
+                .map(|x| {
+                    vec![
+                        // VecLang::Concat(x),
+                        VecLang::VecAdd(x),
+                        VecLang::VecMinus(x),
+                    ]
+                })
+                .flatten();
 
-        let vec = (0..synth.params.vector_size)
-            .map(|_| ids.clone())
-            .multi_cartesian_product()
-            .filter(move |ids| !ids.iter().all(|x| synth.egraph[*x].data.exact))
-            .map(|x| vec![VecLang::Vec(x.into_boxed_slice())])
-            .flatten();
+            let vec = (0..synth.params.vector_size)
+                .map(|_| ids.clone())
+                .multi_cartesian_product()
+                .filter(move |ids| !ids.iter().all(|x| synth.egraph[*x].data.exact))
+                .map(|x| vec![VecLang::Vec(x.into_boxed_slice())])
+                .flatten();
 
-        Box::new(binops.chain(vec))
-        // Box::new(binops)
+            Box::new(binops.chain(vec))
+        }
     }
 
     fn is_valid(
