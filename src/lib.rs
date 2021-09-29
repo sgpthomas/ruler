@@ -289,7 +289,12 @@ impl<L: SynthLanguage> Synthesizer<L> {
     }
 
     fn time_left(&self) -> Duration {
-        Duration::from_secs(self.params.abs_timeout as u64) - self.start_time.elapsed()
+        let limit = Duration::from_secs(self.params.abs_timeout as u64);
+        if self.start_time.elapsed() > limit {
+            Duration::ZERO
+        } else {
+            Duration::from_secs(self.params.abs_timeout as u64) - self.start_time.elapsed()
+        }
     }
 
     /// Get the eclass ids for all eclasses in the egraph.
