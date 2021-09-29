@@ -3,7 +3,7 @@
 # r5n.xlarge
 
 aws ec2 run-instances \
-    --image-id ami-02cf3af4882d6824b \
+    --image-id ami-08d14340baa856967 \
     --security-group-ids sg-0da7694c867e84ae3 \
     --count 1 \
     --instance-type r5n.xlarge \
@@ -18,4 +18,3 @@ aws ec2 describe-instances \
   --output=text
 
 aws ec2 describe-images --owner self
-
