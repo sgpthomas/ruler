@@ -1,9 +1,9 @@
-use crate::{letter, map, self_product, CVec, Equality, SynthAnalysis, SynthLanguage, Synthesizer};
 use egg::{define_language, Id};
 use itertools::Itertools;
 use num::integer::Roots;
 use rand::Rng;
 use rand_pcg::Pcg64;
+use ruler::{letter, map, self_product, CVec, Equality, SynthAnalysis, SynthLanguage, Synthesizer};
 use rustc_hash::FxHasher;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -263,7 +263,13 @@ impl SynthLanguage for VecLang {
                 .map(|tup| match tup {
                     (Some(Value::Int(a)), Some(Value::Int(b))) => {
                         if *b != 0 {
-                            Some(Value::Int(a / b))
+                            if *a == 0 {
+                                Some(Value::Int(0))
+                            } else if a >= b {
+                                Some(Value::Int(a / b))
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
@@ -434,12 +440,12 @@ impl SynthLanguage for VecLang {
         // .unwrap();
         // synth.equalities.insert("assoc_add".into(), assoc_add);
 
-        let iso_add: Equality<VecLang> = Equality::new(
-            &"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap(),
-            &"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap(),
-        )
-        .unwrap();
-        synth.equalities.insert("iso_add".into(), iso_add);
+        // let iso_add: Equality<VecLang> = Equality::new(
+        //     &"(VecAdd (Vec ?a ?b) (Vec ?c ?d))".parse().unwrap(),
+        //     &"(Vec (+ ?a ?c) (+ ?b ?d))".parse().unwrap(),
+        // )
+        // .unwrap();
+        // synth.equalities.insert("iso_add".into(), iso_add);
 
         // add_eq(
         //     synth,
@@ -611,7 +617,9 @@ impl SynthLanguage for VecLang {
         synth: &'a Synthesizer<Self>,
         iter: usize,
     ) -> Box<dyn Iterator<Item = Self> + 'a> {
-        if iter % 2 == 0 {
+        // if iter % 2 == 0 {
+        eprintln!("iter: {}", iter);
+        if (iter - 1) < 2 {
             let binops = (0..2)
                 .map(|_| ids.clone())
                 .multi_cartesian_product()
@@ -622,6 +630,7 @@ impl SynthLanguage for VecLang {
                         VecLang::Add(x),
                         VecLang::Minus(x),
                         // VecLang::Mul(x),
+                        // VecLang::Div(x),
                     ]
                 })
                 .flatten();
@@ -687,30 +696,6 @@ impl SynthLanguage for VecLang {
             );
         }
 
-        // let left: Pattern<VecLang> = "(Vec (+ ?a ?b) (+ ?c ?d))".parse().unwrap();
-        // let right: Pattern<VecLang> = "(VecAdd (Vec ?a ?c) (Vec ?b ?d))".parse().unwrap();
-        // debug(
-        //     "(VecAdd (Vec ?a ?b) (Vec ?b ?a))",
-        //     "(Vec (+ ?a ?b) (+ ?a ?b))",
-        //     n,
-        //     &env,
-        // );
-
-        // let test_env: HashMap<egg::Var, Vec<Option<Value>>, BuildHasherDefault<_>> = vec![
-        //     ("?a".parse().unwrap(), vec![Some(Value::Int(1))]),
-        //     ("?b".parse().unwrap(), vec![Some(Value::Int(2))]),
-        //     ("?c".parse().unwrap(), vec![Some(Value::Int(3))]),
-        //     ("?d".parse().unwrap(), vec![Some(Value::Int(4))]),
-        // ]
-        // .into_iter()
-        // .collect();
-        // log::info!("env: {:?}", test_env);
-        // log::info!("lhs: {}\nrhs: {}", left, right);
-        // let lres = Self::eval_pattern(&left, &test_env, n);
-        // let rres = Self::eval_pattern(&right, &test_env, n);
-        // log::info!("{:?} ?= ({}) {:?}", lres, lres == rres, rres);
-        // panic!("stop");
-
         let lvec = Self::eval_pattern(lhs, &env, n);
         let rvec = Self::eval_pattern(rhs, &env, n);
 
@@ -757,8 +742,8 @@ fn debug(
     panic!();
 }
 
-// fn main() {
-//     VecLang::main()
-// }
+fn main() {
+    VecLang::main()
+}
 
 // 132289, 15053463213406696608

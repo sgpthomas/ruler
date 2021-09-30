@@ -1,4 +1,16 @@
-# some other commands
-rsync -rhP -e "ssh -i ~/.ssh/thelio.pem" ~/Research/ruler/ ubuntu@18.222.147.140:~/ruler/ --exclude={.git,target}
+set -x
 
-rsync -rhP -e "ssh -i ~/.ssh/thelio.pem" ~/Research/dios/ ubuntu@18.222.147.140:~/diospyros/ --exclude={.git,target}
+ADDR=3.144.120.248
+
+# some other commands
+dir=ruler
+rsync -rP --exclude=.git \
+      --exclude=target \
+      -e "ssh -i ~/.ssh/thelio.pem" \
+      ~/Research/$dir/ "ubuntu@$ADDR:~/$dir/"
+      
+dir=diospyros
+rsync -rP --exclude=.git \
+      --exclude=target \
+      -e "ssh -i ~/.ssh/thelio.pem" \
+      ~/Research/$dir/ "ubuntu@$ADDR:~/$dir/"

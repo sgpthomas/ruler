@@ -25,7 +25,6 @@ use std::{hash::BuildHasherDefault, sync::Arc};
 mod bv;
 mod convert_sexp;
 mod derive;
-pub mod dios;
 mod equality;
 mod util;
 
@@ -692,7 +691,7 @@ pub struct SynthParams {
     #[clap(long)]
     pub vector_size: usize,
     /// Absolute timeout
-    #[clap(long, default_value = "0")]
+    #[clap(long, default_value = "120")]
     pub abs_timeout: usize,
 
     ///////////////////
