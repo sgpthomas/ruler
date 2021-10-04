@@ -134,6 +134,13 @@ impl Value {
         })
     }
 
+    fn int_range(min: i32, max: i32, num_samples: usize) -> Vec<Value> {
+        (min..=max)
+            .step_by(((max - min) as usize) / num_samples)
+            .map(|x| Value::Int(x))
+            .collect::<Vec<_>>()
+    }
+
     fn sample_int(rng: &mut Pcg64, min: i32, max: i32, num_samples: usize) -> Vec<Value> {
         (0..num_samples)
             .map(|_| Value::Int(rng.gen_range(min, max)))
@@ -629,8 +636,12 @@ impl SynthLanguage for VecLang {
                     vec![
                         VecLang::Add(x),
                         VecLang::Minus(x),
-                        // VecLang::Mul(x),
+                        VecLang::Mul(x),
                         // VecLang::Div(x),
+                        VecLang::Or(x),
+                        VecLang::And(x),
+                        // VecLang::Ite(x),
+                        VecLang::Lt(x),
                     ]
                 })
                 .flatten();
@@ -668,7 +679,8 @@ impl SynthLanguage for VecLang {
     ) -> bool {
         // use fuzzing to determine equality
 
-        let n = synth.params.num_fuzz;
+        // let n = synth.params.num_fuzz;
+        // let n = 10;
         let mut env = HashMap::default();
 
         for var in lhs.vars() {
@@ -679,25 +691,70 @@ impl SynthLanguage for VecLang {
             env.insert(var, vec![]);
         }
 
-        let (n_ints, n_vecs) = split_into_halves(n);
+        // env.insert(egg::Var::from_str("?a").unwrap(), vec![]);
+        // env.insert(egg::Var::from_str("?b").unwrap(), vec![]);
+        // env.insert(egg::Var::from_str("?c").unwrap(), vec![]);
+        // env.insert(egg::Var::from_str("?d").unwrap(), vec![]);
 
-        for cvec in env.values_mut() {
-            cvec.reserve(n);
-            cvec.extend(
-                Value::sample_int(&mut synth.rng, -100, 100, n_ints)
-                    .into_iter()
-                    .map(Some),
-            );
+        let (n_ints, n_vecs) = split_into_halves(10);
+        // let (n_neg_ints, n_pos_ints) = split_into_halves(n_ints);
 
-            cvec.extend(
-                Value::sample_vec(&mut synth.rng, -100, 100, synth.params.vector_size, n_vecs)
-                    .into_iter()
-                    .map(Some),
-            );
+        let mut length = 0;
+        let possibilities = vec![-25, -2, -1, 0, 1, 2, 25];
+        for l in possibilities.iter().permutations(possibilities.len()) {
+            for cvec in env.values_mut() {
+                cvec.extend(l.iter().map(|x| Some(Value::Int(**x))));
+                // cvec.extend(
+                //     Value::sample_int(&mut synth.rng, -100, 100, 4)
+                //         .into_iter()
+                //         .map(Some),
+                // );
+                // // cvec.extend(
+                // //     Value::sample_int(&mut synth.rng, 0, 100, 4)
+                // //         .into_iter()
+                // //         .map(Some),
+                // // );
+                // cvec.extend(Value::int_range(-100, 100, n_ints).into_iter().map(Some));
+
+                cvec.extend(
+                    Value::sample_vec(&mut synth.rng, -100, 100, synth.params.vector_size, n_vecs)
+                        .into_iter()
+                        .map(Some),
+                );
+
+                length = cvec.len();
+            }
         }
 
-        let lvec = Self::eval_pattern(lhs, &env, n);
-        let rvec = Self::eval_pattern(rhs, &env, n);
+        // let mut d_env: HashMap<egg::Var, Vec<Option<Value>>, BuildHasherDefault<FxHasher>> =
+        //     HashMap::default();
+        // d_env.insert(
+        //     egg::Var::from_str("?a").unwrap(),
+        //     vec![Some(Value::Int(66))],
+        // );
+        // d_env.insert(
+        //     egg::Var::from_str("?b").unwrap(),
+        //     vec![Some(Value::Int(89))],
+        // );
+        // d_env.insert(
+        //     egg::Var::from_str("?c").unwrap(),
+        //     vec![Some(Value::Int(-6))],
+        // );
+        // d_env.insert(
+        //     egg::Var::from_str("?d").unwrap(),
+        //     vec![Some(Value::Int(83))],
+        // );
+
+        // debug(
+        //     "(< (+ ?a ?b) (- ?c ?d))",
+        //     "(< ?b (- ?c ?d))",
+        //     length,
+        //     &d_env,
+        // );
+        // panic!();
+
+        let lvec = Self::eval_pattern(lhs, &env, length);
+        let rvec = Self::eval_pattern(rhs, &env, length);
 
         if lvec != rvec {
             log::debug!("  env: {:?}", env);
@@ -717,12 +774,14 @@ impl SynthLanguage for VecLang {
     }
 }
 
+#[allow(unused)]
 fn add_eq(synth: &mut Synthesizer<VecLang>, name: &str, left: &str, right: &str) {
     let rule: Equality<VecLang> =
         Equality::new(&left.parse().unwrap(), &right.parse().unwrap()).unwrap();
     synth.equalities.insert(name.into(), rule);
 }
 
+#[allow(unused)]
 fn debug(
     left: &str,
     right: &str,
@@ -739,7 +798,8 @@ fn debug(
         lres == rres,
         rres
     );
-    panic!();
+    log::info!("{} => {}", left, right);
+    // panic!();
 }
 
 fn main() {
