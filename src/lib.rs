@@ -999,7 +999,7 @@ impl<L: SynthLanguage> Synthesizer<L> {
             for candidate_eq in new_eqs.values() {
                 runner = runner.with_expr(&L::instantiate(&candidate_eq.lhs));
                 runner = runner.with_expr(&L::instantiate(&candidate_eq.rhs));
-                log::info!("{} <=?=> {}", candidate_eq.lhs, candidate_eq.rhs);
+                // log::info!("{} <=?=> {}", candidate_eq.lhs, candidate_eq.rhs);
             }
 
             runner = runner.run(rewrites);
