@@ -203,7 +203,7 @@ impl IntoIterator for Workload {
                         .map(move |sexp| (sexp, hole.clone(), pegs.clone()))
                         .map(|(sexp, hole, pegs)| {
                             SexpSubstIter::new(sexp, hole, move || {
-                                println!("hi");
+                                // println!("hi");
                                 pegs.clone().into_iter()
                             })
                         })

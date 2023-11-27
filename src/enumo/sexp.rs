@@ -85,6 +85,7 @@ where
         //     println!("* {template}");
         // }
         // println!("\\-----------");
+        println!("[{}] stack size: {}", self.level, self.stack.len());
 
         self.stack
             .pop_front()
