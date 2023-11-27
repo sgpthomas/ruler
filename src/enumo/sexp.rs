@@ -101,9 +101,15 @@ where
 
                     // if there is something left in the parent_iter
                     if let Some(next_item) = parent_iter.next() {
+                        // we want to continue processing the parent_sexp in case
+                        // there are more items left in the parent_iter
                         self.stack.push_front((parent_sexp, parent_iter));
+
+                        // if there are any needles
                         if let Some(ptr) = needle_refs.pop_front() {
+                            // replace the needle with the next_item
                             *ptr = next_item;
+                            // if we have more holes to fill in, then we can spawn the next layer
                             if !needle_refs.is_empty() {
                                 let child_iter = (self.spawn_iterator)();
                                 self.stack.push_front((parent_clone, child_iter));
