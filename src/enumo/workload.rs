@@ -92,29 +92,30 @@ impl Workload {
 
     /// Materialize workload into a vector of s-expressions
     pub fn force(&self) -> Vec<Sexp> {
-        match self {
-            Workload::Set(set) => set.clone(),
-            Workload::Plug(wkld, name, pegs) => {
-                let mut res = vec![];
-                let pegs = pegs.force();
-                for sexp in wkld.force() {
-                    res.extend(sexp.plug(name, &pegs));
-                }
-                res
-            }
-            Workload::Filter(f, workload) => {
-                let mut set = workload.force();
-                set.retain(|sexp| f.test(sexp));
-                set
-            }
-            Workload::Append(workloads) => {
-                let mut set = vec![];
-                for w in workloads {
-                    set.extend(w.force());
-                }
-                set
-            }
-        }
+        self.clone().into_iter().collect()
+        // match self {
+        //     Workload::Set(set) => set.clone(),
+        //     Workload::Plug(wkld, name, pegs) => {
+        //         let mut res = vec![];
+        //         let pegs = pegs.force();
+        //         for sexp in wkld.force() {
+        //             res.extend(sexp.plug(name, &pegs));
+        //         }
+        //         res
+        //     }
+        //     Workload::Filter(f, workload) => {
+        //         let mut set = workload.force();
+        //         set.retain(|sexp| f.test(sexp));
+        //         set
+        //     }
+        //     Workload::Append(workloads) => {
+        //         let mut set = vec![];
+        //         for w in workloads {
+        //             set.extend(w.force());
+        //         }
+        //         set
+        //     }
+        // }
     }
 
     pub fn pretty_print(&self) {
@@ -182,6 +183,44 @@ impl From<&[&str]> for Workload {
     }
 }
 
+impl IntoIterator for Workload {
+    type Item = Sexp;
+    type IntoIter = Box<dyn Iterator<Item = Sexp>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Workload::Set(v) => {
+                // println!(
+                //     "set {:?}",
+                //     v.iter().map(|x| format!("{x}")).collect::<Vec<_>>()
+                // );
+                Box::new(v.into_iter())
+            }
+            Workload::Plug(wkld, hole, pegs) => {
+                // println!("plug {wkld:?} {hole}");
+                Box::new(
+                    wkld.into_iter()
+                        .map(move |sexp| (sexp, hole.clone(), pegs.clone()))
+                        .map(|(sexp, hole, pegs)| {
+                            SexpSubstIter::new(sexp, hole, move || {
+                                println!("hi");
+                                pegs.clone().into_iter()
+                            })
+                        })
+                        .flatten(),
+                )
+            }
+            Workload::Filter(filter, wkld) => {
+                // println!("filter {filter:?} {wkld:?}");
+                Box::new(wkld.into_iter().filter(move |sexp| filter.test(sexp)))
+            }
+            Workload::Append(wklds) => {
+                Box::new(wklds.into_iter().map(|wkld| wkld.into_iter()).flatten())
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::recipe_utils::{base_lang, iter_metric};
@@ -196,6 +235,16 @@ mod test {
             .plug("x", &pegs)
             .filter(Filter::MetricLt(Metric::Atoms, 2));
         assert_eq!(plugged.force().len(), 3);
+    }
+
+    #[test]
+    fn filter_optimization_iter() {
+        let wkld = Workload::new(["x"]);
+        let pegs = Workload::new(["a", "b", "c"]);
+        let plugged = wkld
+            .plug("x", &pegs)
+            .filter(Filter::MetricLt(Metric::Atoms, 2));
+        assert_eq!(plugged.into_iter().collect::<Vec<_>>().len(), 3);
     }
 
     #[test]

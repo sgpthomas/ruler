@@ -1,4 +1,7 @@
-use std::str::FromStr;
+use std::{
+    collections::{LinkedList, VecDeque},
+    str::FromStr,
+};
 
 use super::*;
 
@@ -32,6 +35,129 @@ impl std::fmt::Display for Sexp {
                 Ok(())
             }
         }
+    }
+}
+
+static SSI_COUNT: std::sync::RwLock<usize> = std::sync::RwLock::new(0);
+
+#[derive(Clone)]
+pub struct SexpSubstIter<I, F>
+where
+    I: Iterator<Item = Sexp>,
+    F: Fn() -> I,
+{
+    needle: String,
+    spawn_iterator: F,
+    stack: VecDeque<(Sexp, I)>,
+    level: usize,
+}
+
+impl<I, F> SexpSubstIter<I, F>
+where
+    I: Iterator<Item = Sexp>,
+    F: Fn() -> I,
+{
+    pub fn new<S: ToString>(inital_sexp: Sexp, needle: S, spawn_iterator: F) -> Self {
+        let initial_iter = spawn_iterator();
+        let level = SSI_COUNT.read().unwrap().clone();
+        let mut ssi_count_ref = SSI_COUNT.write().unwrap();
+        *ssi_count_ref += 1;
+        // println!("starting ssi for {inital_sexp} \\ {}", needle.to_string());
+        SexpSubstIter {
+            needle: needle.to_string(),
+            spawn_iterator,
+            stack: VecDeque::from([(inital_sexp, initial_iter)]),
+            level,
+        }
+    }
+}
+
+impl<I, F> Iterator for SexpSubstIter<I, F>
+where
+    I: Iterator<Item = Sexp>,
+    F: Fn() -> I,
+{
+    type Item = Sexp;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // println!("/--{}-------- {}", self.level, self.needle);
+        // for (template, _) in &self.stack {
+        //     println!("* {template}");
+        // }
+        // println!("\\-----------");
+
+        self.stack
+            .pop_front()
+            .and_then(|(parent_sexp, mut parent_iter)| {
+                let mut parent_clone = parent_sexp.clone();
+                let mut needle_refs = parent_clone.find_all(&self.needle);
+
+                // if there are no instances of the needle, we can return immediately
+                if needle_refs.is_empty() {
+                    // println!("semi-yield {parent_clone}");
+                    Some(parent_clone)
+                } else {
+                    // now we know that there is at least one instance of the needle
+
+                    // if there is something left in the parent_iter
+                    if let Some(next_item) = parent_iter.next() {
+                        self.stack.push_front((parent_sexp, parent_iter));
+                        if let Some(ptr) = needle_refs.pop_front() {
+                            *ptr = next_item;
+                            if !needle_refs.is_empty() {
+                                let child_iter = (self.spawn_iterator)();
+                                self.stack.push_front((parent_clone, child_iter));
+                                self.next()
+                            } else {
+                                // println!("semi-yield {parent_clone}");
+                                Some(parent_clone)
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        // skip this item
+                        self.next()
+                    }
+                }
+                // // if there is juice left in the iterator
+                // if let Some(next_item) = parent_iter.next() {
+                //     // try to go deeper one layer by replacing the first instance of the
+                //     // needle with the item we got from the iterator
+                //     if let Some((child_sexp, more)) =
+                //         parent_sexp.replace_first(&self.needle, &next_item)
+                //     {
+                //         // there might be more juice in the parent_iter,
+                //         // so push it back on the stack so that we try
+                //         // to process it again
+                //         self.stack.push_front((parent_sexp, parent_iter));
+
+                //         // next we want to spawn a new iterator representing one layer
+                //         // deeper in the search. we want to make sure that this item
+                //         // is the next item processed on the stack so that we perform
+                //         // a depth-first traversal of the tree.
+                //         if more {
+                //             let child_iter = (self.spawn_iterator)();
+                //             self.stack.push_front((child_sexp, child_iter));
+                //             self.next()
+                //         } else {
+                //             // self.stack.push_front((child_sexp, None));
+                //             println!("yield {} child", self.level);
+                //             Some(child_sexp)
+                //         }
+                //     } else {
+                //         println!("yield {} parent {parent_sexp}", self.level);
+                //         // otherwise (no needle), we are at a leaf and all instances
+                //         // of the needle are fully instantiated. we can yield this
+                //         // item from the iterator
+                //         Some(parent_sexp)
+                //     }
+                // } else {
+                //     // we are done with this layer of the tree. continue processing
+                //     // the next item on the stack
+                //     self.next()
+                // }
+            })
     }
 }
 
@@ -111,6 +237,38 @@ impl Sexp {
                 Metric::Lists => s.iter().map(|x| x.measure(metric)).sum::<usize>() + 1,
                 Metric::Depth => s.iter().map(|x| x.measure(metric)).max().unwrap() + 1,
             },
+        }
+    }
+
+    fn first(&mut self, needle: &str) -> Option<&mut Self> {
+        match self {
+            Sexp::Atom(a) if a == needle => Some(self),
+            Sexp::Atom(_) => None,
+            Sexp::List(list) => list.into_iter().find_map(|s| s.first(needle)),
+        }
+    }
+
+    pub(crate) fn find_all(&mut self, needle: &str) -> LinkedList<&mut Self> {
+        match self {
+            Sexp::Atom(a) if a == needle => LinkedList::from([self]),
+            Sexp::Atom(_) => LinkedList::new(),
+            Sexp::List(list) => list.into_iter().fold(LinkedList::new(), |mut acc, el| {
+                acc.append(&mut el.find_all(needle));
+                acc
+            }),
+        }
+    }
+
+    pub(crate) fn replace_first(&self, needle: &str, new: &Sexp) -> Option<(Self, bool)> {
+        let mut copy = self.clone();
+
+        let mut all_refs = copy.find_all(needle);
+        if let Some(first) = all_refs.pop_front() {
+            *first = new.clone();
+            let empty = all_refs.is_empty();
+            Some((copy, !empty))
+        } else {
+            None
         }
     }
 }
